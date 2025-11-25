@@ -30,6 +30,7 @@ export type Employee = {
 export type AttendanceRecord = {
   id: string;
   employee: Employee;
+  date: string;
   checkIn: string | null;
   checkOut: string | null;
   status: 'حاضر' | 'غائب' | 'في إجازة';
