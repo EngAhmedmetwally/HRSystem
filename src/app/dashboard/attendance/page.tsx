@@ -1,7 +1,7 @@
 
 'use client';
 
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import {
   Table,
   TableBody,
@@ -22,11 +22,29 @@ import { Calendar } from '@/components/ui/calendar';
 import { format } from 'date-fns';
 import { ar } from 'date-fns/locale';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { useSearchParams } from 'next/navigation';
 
 export default function AttendancePage() {
+  const searchParams = useSearchParams();
   const [startDate, setStartDate] = useState<Date | undefined>(undefined);
   const [endDate, setEndDate] = useState<Date | undefined>(undefined);
   const [selectedEmployee, setSelectedEmployee] = useState<string>('all');
+  
+  useEffect(() => {
+    const employeeId = searchParams.get('employeeId');
+    const urlStartDate = searchParams.get('startDate');
+    const urlEndDate = searchParams.get('endDate');
+
+    if (employeeId) {
+        setSelectedEmployee(employeeId);
+    }
+    if (urlStartDate) {
+        setStartDate(new Date(urlStartDate));
+    }
+    if (urlEndDate) {
+        setEndDate(new Date(urlEndDate));
+    }
+  }, [searchParams]);
 
   const getStatusVariant = (status: 'حاضر' | 'غائب' | 'في إجازة') => {
     switch (status) {
@@ -44,8 +62,14 @@ export default function AttendancePage() {
       const recordDate = new Date(record.date);
       recordDate.setHours(0, 0, 0, 0);
 
-      const isAfterStartDate = !startDate || recordDate >= startDate;
-      const isBeforeEndDate = !endDate || recordDate <= endDate;
+      const start = startDate ? new Date(startDate) : null;
+      if (start) start.setHours(0, 0, 0, 0);
+
+      const end = endDate ? new Date(endDate) : null;
+      if (end) end.setHours(0, 0, 0, 0);
+      
+      const isAfterStartDate = !start || recordDate >= start;
+      const isBeforeEndDate = !end || recordDate <= end;
       const isEmployeeMatch = selectedEmployee === 'all' || record.employee.id === selectedEmployee;
       
       return isAfterStartDate && isBeforeEndDate && isEmployeeMatch;

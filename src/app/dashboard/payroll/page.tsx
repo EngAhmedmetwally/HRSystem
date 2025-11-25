@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import {
   Table,
   TableBody,
@@ -27,9 +27,12 @@ import {
 } from '@/components/ui/select';
 import { employees } from '@/lib/mock-data';
 import type { Employee } from '@/lib/types';
-import { Download, Calculator } from 'lucide-react';
+import { Download, Calculator, Banknote } from 'lucide-react';
+import { useToast } from '@/hooks/use-toast';
+import { useRouter } from 'next/navigation';
+import { startOfMonth, endOfMonth, format } from 'date-fns';
 
-// Mock data for payroll calculation
+
 const getPayrollData = (employees: Employee[]) => {
   return employees.map(emp => {
     const deductions = Math.floor(Math.random() * 500); // Random deductions
@@ -49,17 +52,53 @@ const getPayrollData = (employees: Employee[]) => {
 export default function PayrollPage() {
   const [selectedMonth, setSelectedMonth] = useState<string>('');
   const [payrollData, setPayrollData] = useState<any[]>([]);
+  const { toast } = useToast();
+  const router = useRouter();
 
   const handleGeneratePayroll = () => {
     if (selectedMonth) {
       setPayrollData(getPayrollData(employees));
     }
   };
+
+  const handleDisburseSalaries = () => {
+     if (payrollData.length > 0) {
+        // In a real app, you would save this to a database and trigger payments.
+        // For this demo, we'll just show a success message.
+        localStorage.setItem(`payroll_${selectedMonth}_${new Date().getFullYear()}`, JSON.stringify(payrollData));
+        toast({
+            title: 'تم صرف الرواتب بنجاح',
+            description: `تم حفظ وتأكيد صرف رواتب شهر ${selectedMonth}.`,
+        });
+     }
+  };
+  
+  const handleRowClick = (employeeId: string) => {
+    if (!selectedMonth || !currentYear) return;
+
+    const monthIndex = months.findIndex(m => m.value === selectedMonth);
+    const date = new Date(currentYear, monthIndex, 1);
+    
+    const startDate = startOfMonth(date);
+    const endDate = endOfMonth(date);
+
+    const query = new URLSearchParams({
+        employeeId: employeeId,
+        startDate: startDate.toISOString(),
+        endDate: endDate.toISOString(),
+    }).toString();
+
+    router.push(`/dashboard/attendance?${query}`);
+  };
+
+  const totalNetPay = useMemo(() => {
+    return payrollData.reduce((acc, record) => acc + record.netPay, 0);
+  }, [payrollData]);
   
   const currentYear = new Date().getFullYear();
   const months = Array.from({ length: 12 }, (_, i) => {
-    const month = new Date(0, i).toLocaleString('ar-EG', { month: 'long' });
-    return `${month} ${currentYear}`;
+    const monthName = new Date(currentYear, i).toLocaleString('ar-EG', { month: 'long' });
+    return { value: monthName, label: `${monthName} ${currentYear}` };
   });
 
   return (
@@ -71,7 +110,7 @@ export default function PayrollPage() {
       </div>
       
       <div className="grid grid-cols-1 lg:grid-cols-4 gap-4">
-        <div className="lg:col-span-1">
+        <div className="lg:col-span-1 flex flex-col gap-4">
           <Card>
             <CardHeader>
               <CardTitle>إنشاء كشف المرتبات</CardTitle>
@@ -84,7 +123,7 @@ export default function PayrollPage() {
                 </SelectTrigger>
                 <SelectContent>
                   {months.map(month => (
-                    <SelectItem key={month} value={month}>{month}</SelectItem>
+                    <SelectItem key={month.value} value={month.value}>{month.label}</SelectItem>
                   ))}
                 </SelectContent>
               </Select>
@@ -96,6 +135,28 @@ export default function PayrollPage() {
               </Button>
             </CardFooter>
           </Card>
+           {payrollData.length > 0 && (
+              <Card>
+                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                   <CardTitle className="text-sm font-medium">إجمالي صافي الرواتب</CardTitle>
+                   <Banknote className="h-4 w-4 text-muted-foreground" />
+                </CardHeader>
+                <CardContent>
+                  <div className="text-2xl font-bold">
+                    {totalNetPay.toLocaleString()} ج.م
+                  </div>
+                   <p className="text-xs text-muted-foreground pt-1">
+                      المبلغ الإجمالي المستحق لهذا الشهر
+                   </p>
+                </CardContent>
+                <CardFooter>
+                    <Button onClick={handleDisburseSalaries} className="w-full">
+                        <Banknote className="ml-2 h-4 w-4" />
+                        تأكيد صرف الرواتب
+                    </Button>
+                </CardFooter>
+              </Card>
+           )}
         </div>
 
         <div className="lg:col-span-3">
@@ -104,7 +165,7 @@ export default function PayrollPage() {
               <div className="flex items-center justify-between">
                 <div>
                   <CardTitle>نتائج كشف المرتبات {selectedMonth && `لشهر ${selectedMonth}`}</CardTitle>
-                  <CardDescription>تفاصيل رواتب الموظفين المحسوبة.</CardDescription>
+                  <CardDescription>تفاصيل رواتب الموظفين. اضغط على أي موظف لعرض سجل حضوره.</CardDescription>
                 </div>
                 {payrollData.length > 0 && (
                    <Button variant="outline">
@@ -128,7 +189,7 @@ export default function PayrollPage() {
                   </TableHeader>
                   <TableBody>
                     {payrollData.map((record) => (
-                      <TableRow key={record.id}>
+                      <TableRow key={record.id} onClick={() => handleRowClick(record.id)} className="cursor-pointer">
                         <TableCell>{record.name}</TableCell>
                         <TableCell>{record.grossPay.toLocaleString()} ج.م</TableCell>
                         <TableCell className="text-green-600">{record.overtime.toLocaleString()} ج.م</TableCell>
