@@ -1,0 +1,11 @@
+import { LayoutDashboard, Users, UserPlus, QrCode, Wallet, Settings } from 'lucide-react';
+import type { Screen } from './types';
+
+export const screens: Screen[] = [
+  { id: 'dashboard', href: '/dashboard', label: 'لوحة التحكم', icon: LayoutDashboard },
+  { id: 'attendance', href: '/dashboard/attendance', label: 'سجل الحضور', icon: Users },
+  { id: 'employees', href: '/dashboard/employees', label: 'الموظفين', icon: UserPlus },
+  { id: 'qr-code', href: '/dashboard/qr-code', label: 'رمز QR', icon: QrCode },
+  { id: 'payroll', href: '/dashboard/payroll', label: 'كشف المرتبات', icon: Wallet },
+  { id: 'settings', href: '/dashboard/settings', label: 'الإعدادات', icon: Settings },
+];

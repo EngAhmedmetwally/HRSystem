@@ -1,19 +1,16 @@
 'use client';
 
+import { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { usePathname } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
 import {
-  LayoutDashboard,
-  Users,
-  QrCode,
-  Wallet,
   Camera,
-  Settings,
   LogOut,
+  Settings,
   Landmark,
-  UserPlus,
 } from 'lucide-react';
-
+import { screens as allScreens } from '@/lib/screens';
+import type { Employee, Screen } from '@/lib/types';
 import {
   Sidebar,
   SidebarContent,
@@ -38,19 +35,37 @@ import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { employees } from '@/lib/mock-data';
 
-const navItems = [
-  { href: '/dashboard', icon: LayoutDashboard, label: 'لوحة التحكم' },
-  { href: '/dashboard/attendance', icon: Users, label: 'سجل الحضور' },
-  { href: '/dashboard/employees', icon: UserPlus, label: 'الموظفين' },
-  { href: '/dashboard/qr-code', icon: QrCode, label: 'رمز QR' },
-  { href: '/dashboard/payroll', icon: Wallet, label: 'كشف المرتبات' },
-  { href: '/dashboard/settings', icon: Settings, label: 'الإعدادات' },
-];
-
 export function SidebarNav() {
   const pathname = usePathname();
+  const router = useRouter();
   const { state } = useSidebar();
-  const currentUser = employees[1];
+  
+  const [currentUser, setCurrentUser] = useState<Partial<Employee> | null>(null);
+  const [visibleScreens, setVisibleScreens] = useState<Screen[]>([]);
+  
+  useEffect(() => {
+    // In a real app, this would come from a session or a global state management library
+    const userJson = localStorage.getItem('currentUser');
+    if (userJson) {
+      const user = JSON.parse(userJson);
+      setCurrentUser(user);
+
+      const allowed = allScreens.filter(screen => user.allowedScreens?.includes(screen.id));
+      setVisibleScreens(allowed);
+    } else {
+      // If no user, maybe redirect to login
+      router.push('/login');
+    }
+  }, [pathname, router]);
+
+  const handleLogout = () => {
+    localStorage.removeItem('currentUser');
+    router.push('/login');
+  };
+
+  if (!currentUser) {
+    return null; // Or a loading skeleton
+  }
 
   return (
     <Sidebar side="right">
@@ -67,11 +82,11 @@ export function SidebarNav() {
       </SidebarHeader>
       <SidebarContent>
         <SidebarMenu>
-          {navItems.map((item) => (
+          {visibleScreens.map((item) => (
             <SidebarMenuItem key={item.href}>
               <SidebarMenuButton
                 asChild
-                isActive={pathname.startsWith(item.href)}
+                isActive={pathname === item.href}
                 tooltip={item.label}
               >
                 <Link href={item.href}>
@@ -105,7 +120,7 @@ export function SidebarNav() {
             >
               <Avatar className="h-8 w-8">
                 <AvatarImage src={currentUser.avatarUrl} alt={currentUser.name} data-ai-hint={currentUser.avatarHint} />
-                <AvatarFallback>{currentUser.name.charAt(0)}</AvatarFallback>
+                <AvatarFallback>{currentUser.name?.charAt(0)}</AvatarFallback>
               </Avatar>
               <div className={cn("flex flex-col overflow-hidden transition-all duration-300", state === 'collapsed' ? 'w-0' : 'w-auto')}>
                 <span className="truncate font-medium">{currentUser.name}</span>
@@ -118,11 +133,12 @@ export function SidebarNav() {
           <DropdownMenuContent side="top" align="start" className="w-56" sideOffset={10}>
             <DropdownMenuLabel>حسابي</DropdownMenuLabel>
             <DropdownMenuSeparator />
-            <DropdownMenuItem>
+            <DropdownMenuItem onClick={() => router.push('/dashboard/settings')}>
               <Settings className="ml-2 h-4 w-4" />
               <span>الإعدادات</span>
             </DropdownMenuItem>
-            <DropdownMenuItem>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem onClick={handleLogout}>
               <LogOut className="ml-2 h-4 w-4" />
               <span>تسجيل الخروج</span>
             </DropdownMenuItem>

@@ -9,48 +9,63 @@ const getPlaceholderImage = (id: string) => {
 export const employees: Employee[] = [
   { 
     id: '1', 
-    name: 'أحمد محمود', 
+    name: 'أحمد محمود',
+    username: 'ahmed.m',
+    password: 'password123',
     role: 'مهندس برمجيات', 
     department: 'التطوير',
     salary: { base: 1200000, allowances: 300000 },
     ...getPlaceholderImage('employee-1'),
-    workSchedule: { type: 'default', weekends: ['الجمعة', 'السبت'] }
+    workSchedule: { type: 'default', weekends: ['الجمعة', 'السبت'] },
+    allowedScreens: ['dashboard', 'attendance', 'qr-code']
   },
   { 
     id: '2', 
     name: 'فاطمة الزهراء', 
+    username: 'fatima.z',
+    password: 'password123',
     role: 'مديرة مشروع', 
     department: 'الإدارة',
     salary: { base: 2000000, allowances: 500000 },
     ...getPlaceholderImage('employee-2'),
-    workSchedule: { type: 'default', weekends: ['الجمعة', 'السبت'] }
+    workSchedule: { type: 'default', weekends: ['الجمعة', 'السبت'] },
+    allowedScreens: ['dashboard', 'attendance', 'employees', 'qr-code', 'payroll', 'settings']
   },
   { 
     id: '3', 
     name: 'يوسف علي', 
+    username: 'yousef.a',
+    password: 'password123',
     role: 'مصمم واجهات', 
     department: 'التصميم',
     salary: { base: 900000, allowances: 200000 },
     ...getPlaceholderImage('employee-3'),
-    workSchedule: { type: 'custom', startTime: '10:00', endTime: '18:00', weekends: ['الجمعة', 'السبت'] }
+    workSchedule: { type: 'custom', startTime: '10:00', endTime: '18:00', weekends: ['الجمعة', 'السبت'] },
+    allowedScreens: ['dashboard', 'attendance']
   },
   { 
     id: '4', 
     name: 'مريم خالد', 
+    username: 'mariam.k',
+    password: 'password123',
     role: 'محللة بيانات',
     department: 'البيانات',
     salary: { base: 1500000, allowances: 350000 },
      ...getPlaceholderImage('employee-4'),
-    workSchedule: { type: 'default', weekends: ['الجمعة', 'السبت'] }
+    workSchedule: { type: 'default', weekends: ['الجمعة', 'السبت'] },
+    allowedScreens: ['dashboard', 'attendance', 'payroll']
     },
   { 
     id: '5', 
     name: 'عمر شريف', 
+    username: 'omar.s',
+    password: 'password123',
     role: 'مهندس DevOps',
     department: 'العمليات',
     salary: { base: 1800000, allowances: 400000 },
     ...getPlaceholderImage('employee-5'),
-    workSchedule: { type: 'default', weekends: ['الجمعة'] }
+    workSchedule: { type: 'default', weekends: ['الجمعة'] },
+    allowedScreens: ['dashboard', 'attendance', 'settings']
   },
 ];
 

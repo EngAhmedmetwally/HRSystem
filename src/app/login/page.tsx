@@ -15,11 +15,12 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Landmark } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
+import { employees } from '@/lib/mock-data';
 
 export default function LoginPage() {
   const router = useRouter();
   const { toast } = useToast();
-  const [email, setEmail] = useState('');
+  const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [isLoading, setIsLoading] = useState(false);
 
@@ -29,17 +30,40 @@ export default function LoginPage() {
 
     // Simulate network delay
     setTimeout(() => {
-      if (email === 'admin@highclass.com' && password === 'admin102030') {
+      // Special case for hardcoded admin user
+      if (username === 'admin@highclass.com' && password === 'admin102030') {
         toast({
           title: 'تم تسجيل الدخول بنجاح',
-          description: 'مرحباً بعودتك!',
+          description: 'مرحباً بعودتك أيها المدير!',
         });
+         // In a real app, you'd set a session/token here.
+        // For now, we'll store a mock user in localStorage.
+        localStorage.setItem('currentUser', JSON.stringify({
+            name: 'Admin',
+            role: 'Administrator',
+            allowedScreens: ['dashboard', 'attendance', 'employees', 'qr-code', 'payroll', 'settings']
+        }));
+        router.push('/dashboard');
+        return;
+      }
+      
+      // Find user in mock data
+      const user = employees.find(
+        (emp) => emp.username === username && emp.password === password
+      );
+
+      if (user) {
+        toast({
+          title: 'تم تسجيل الدخول بنجاح',
+          description: `مرحباً بعودتك، ${user.name}!`,
+        });
+        localStorage.setItem('currentUser', JSON.stringify(user));
         router.push('/dashboard');
       } else {
         toast({
           variant: 'destructive',
           title: 'فشل تسجيل الدخول',
-          description: 'البريد الإلكتروني أو كلمة المرور غير صحيحة.',
+          description: 'اسم المستخدم أو كلمة المرور غير صحيحة.',
         });
         setIsLoading(false);
       }
@@ -57,19 +81,19 @@ export default function LoginPage() {
           </div>
           <CardTitle>HighClass HR</CardTitle>
           <CardDescription>
-            تسجيل الدخول إلى حسابك الإداري
+            تسجيل الدخول إلى حسابك
           </CardDescription>
         </CardHeader>
         <form onSubmit={handleSubmit}>
           <CardContent className="space-y-4">
             <div className="space-y-2">
-              <Label htmlFor="email">البريد الإلكتروني</Label>
+              <Label htmlFor="username">اسم المستخدم</Label>
               <Input
-                id="email"
-                type="email"
-                placeholder="admin@highclass.com"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
+                id="username"
+                type="text"
+                placeholder="اسم المستخدم الخاص بك"
+                value={username}
+                onChange={(e) => setUsername(e.target.value)}
                 required
                 dir="ltr"
               />

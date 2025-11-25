@@ -1,6 +1,15 @@
+export type Screen = {
+  id: string;
+  label: string;
+  href: string;
+  icon: React.ElementType;
+};
+
 export type Employee = {
   id: string;
   name: string;
+  username: string;
+  password?: string; // Should be handled securely, not stored plaintext
   role: string;
   department?: string;
   salary: {
@@ -15,6 +24,7 @@ export type Employee = {
     endTime?: string;
     weekends: ('السبت' | 'الأحد' | 'الاثنين' | 'الثلاثاء' | 'الأربعاء' | 'الخميس' | 'الجمعة')[];
   };
+  allowedScreens: string[];
 };
 
 export type AttendanceRecord = {

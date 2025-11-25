@@ -26,16 +26,19 @@ import { useForm, SubmitHandler, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { employees as initialEmployees } from '@/lib/mock-data';
-import type { Employee } from '@/lib/types';
+import type { Employee, Screen } from '@/lib/types';
 import { PlusCircle } from 'lucide-react';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Checkbox } from '@/components/ui/checkbox';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import { screens } from '@/lib/screens';
 
 const weekDays = ['السبت', 'الأحد', 'الاثنين', 'الثلاثاء', 'الأربعاء', 'الخميس', 'الجمعة'] as const;
 
 const employeeSchema = z.object({
   name: z.string().min(1, 'الاسم مطلوب'),
+  username: z.string().min(3, 'اسم المستخدم مطلوب (3 أحرف على الأقل)'),
+  password: z.string().min(6, 'كلمة المرور مطلوبة (6 أحرف على الأقل)'),
   role: z.string().min(1, 'الوظيفة مطلوبة'),
   department: z.string().min(1, 'القسم مطلوب'),
   baseSalary: z.coerce.number().min(0, 'الراتب الأساسي يجب أن يكون رقمًا موجبًا'),
@@ -44,6 +47,7 @@ const employeeSchema = z.object({
   startTime: z.string().optional(),
   endTime: z.string().optional(),
   weekends: z.array(z.enum(weekDays)).min(1, 'يجب اختيار يوم إجازة واحد على الأقل'),
+  allowedScreens: z.array(z.string()).min(1, 'يجب اختيار شاشة واحدة على الأقل'),
 }).refine(data => {
     if (data.workScheduleType === 'custom') {
         return !!data.startTime && !!data.endTime;
@@ -72,6 +76,7 @@ export default function EmployeesPage() {
     defaultValues: {
         workScheduleType: 'default',
         weekends: ['الجمعة', 'السبت'],
+        allowedScreens: [],
     },
   });
 
@@ -81,6 +86,8 @@ export default function EmployeesPage() {
     const newEmployee: Employee = {
       id: (employees.length + 1).toString(),
       name: data.name,
+      username: data.username,
+      password: data.password, // In a real app, this should be hashed
       role: data.role,
       department: data.department,
       salary: {
@@ -93,6 +100,7 @@ export default function EmployeesPage() {
         endTime: data.endTime,
         weekends: data.weekends,
       },
+      allowedScreens: data.allowedScreens,
       avatarUrl: `https://picsum.photos/seed/${employees.length + 1}/100/100`,
       avatarHint: 'person',
     };
@@ -118,13 +126,23 @@ export default function EmployeesPage() {
             <DialogHeader>
               <DialogTitle>إضافة موظف جديد</DialogTitle>
             </DialogHeader>
-             <ScrollArea className="h-[60vh] p-1">
+             <ScrollArea className="h-[70vh] p-1">
             <form onSubmit={handleSubmit(onSubmit)} className="space-y-4 px-5">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
                     <Label htmlFor="name">اسم الموظف</Label>
                     <Input id="name" {...register('name')} />
                     {errors.name && <p className="text-sm text-destructive mt-1">{errors.name.message}</p>}
+                  </div>
+                   <div>
+                    <Label htmlFor="username">اسم المستخدم</Label>
+                    <Input id="username" {...register('username')} />
+                    {errors.username && <p className="text-sm text-destructive mt-1">{errors.username.message}</p>}
+                  </div>
+                   <div>
+                    <Label htmlFor="password">كلمة المرور</Label>
+                    <Input id="password" type="password" {...register('password')} />
+                    {errors.password && <p className="text-sm text-destructive mt-1">{errors.password.message}</p>}
                   </div>
                   <div>
                     <Label htmlFor="role">الوظيفة</Label>
@@ -218,6 +236,39 @@ export default function EmployeesPage() {
                   />
                   {errors.weekends && <p className="text-sm text-destructive mt-1">{errors.weekends.message}</p>}
                 </div>
+                
+                <div className="space-y-2 border-t pt-4">
+                  <Label>صلاحيات الوصول للشاشات</Label>
+                  <Controller
+                    name="allowedScreens"
+                    control={control}
+                    render={({ field }) => (
+                      <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                        {screens.map((screen) => (
+                          <Label
+                            key={screen.id}
+                            className="flex items-center gap-2 p-2 border rounded-md cursor-pointer has-[input:checked]:bg-secondary has-[input:checked]:text-secondary-foreground"
+                          >
+                            <Checkbox
+                              checked={field.value?.includes(screen.id)}
+                              onCheckedChange={(checked) => {
+                                return checked
+                                  ? field.onChange([...(field.value || []), screen.id])
+                                  : field.onChange(
+                                      field.value?.filter(
+                                        (value) => value !== screen.id
+                                      )
+                                    );
+                              }}
+                            />
+                            {screen.label}
+                          </Label>
+                        ))}
+                      </div>
+                    )}
+                  />
+                   {errors.allowedScreens && <p className="text-sm text-destructive mt-1">{errors.allowedScreens.message}</p>}
+                </div>
 
 
               <DialogFooter className="pt-4">
@@ -245,6 +296,7 @@ export default function EmployeesPage() {
               <TableRow>
                 <TableHead>الرقم</TableHead>
                 <TableHead>الاسم</TableHead>
+                <TableHead>اسم المستخدم</TableHead>
                 <TableHead>الوظيفة</TableHead>
                 <TableHead>الدوام</TableHead>
                 <TableHead>إجمالي الراتب</TableHead>
@@ -257,6 +309,7 @@ export default function EmployeesPage() {
                   <TableRow key={employee.id}>
                     <TableCell>{index + 1}</TableCell>
                     <TableCell>{employee.name}</TableCell>
+                    <TableCell>{employee.username}</TableCell>
                     <TableCell>{employee.role}</TableCell>
                     <TableCell>
                       {employee.workSchedule.type === 'default' ? 'عام' : 
