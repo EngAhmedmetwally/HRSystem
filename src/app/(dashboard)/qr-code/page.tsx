@@ -58,15 +58,20 @@ export default function QrCodePage() {
 
   // Separate effect for progress bar animation
   useEffect(() => {
-    if (progress > 0) {
-      // Calculate the decrement step to ensure it reaches 0 in QR_LIFESPAN seconds
-      const decrementStep = 100 / QR_LIFESPAN;
-      const timer = setTimeout(() => {
-        setProgress(prev => Math.max(0, prev - decrementStep));
+    if (qrValue) { // Only run progress if there's a QR value
+      const progressInterval = setInterval(() => {
+        setProgress(prev => {
+          const nextProgress = prev - (100 / QR_LIFESPAN);
+          if (nextProgress <= 0) {
+            return 0;
+          }
+          return nextProgress;
+        });
       }, 1000);
-      return () => clearTimeout(timer);
+
+      return () => clearInterval(progressInterval);
     }
-  }, [progress]);
+  }, [qrValue]);
 
 
   return (
@@ -84,12 +89,11 @@ export default function QrCodePage() {
             <CardDescription>{currentDate}</CardDescription>
           </CardHeader>
           <CardContent className="flex flex-col items-center gap-6">
-            <div style={{ height: "auto", margin: "0 auto", maxWidth: 256, width: "100%", background: 'white', padding: '16px', borderRadius: 'var(--radius)' }}>
+            <div style={{ background: 'white', padding: '16px', borderRadius: 'var(--radius)' }}>
               {qrValue ? (
                 <QRCode
-                  size={256}
-                  style={{ height: "auto", maxWidth: "100%", width: "100%" }}
                   value={qrValue}
+                  size={256}
                   viewBox={`0 0 256 256`}
                 />
               ) : (
