@@ -91,12 +91,15 @@ export function SidebarNav() {
   }, [isUserLoading, user, router]);
 
   const visibleScreens = useMemo(() => {
+    if (isUserLoading) return []; // Wait until user check is complete
+
     // Super user gets all screens except their own attendance page
     if (isSuperUser) {
       return allScreens.filter(s => s.id !== 'my-attendance');
     }
+
     // Regular employee logic
-    if (isUserLoading || isEmployeeLoading || !employeeData) return []; // Return empty while loading employee data
+    if (isEmployeeLoading || !employeeData) return []; // Return empty while loading employee data
     
     const allowed = employeeData.allowedScreens || [];
     // Ensure "My Attendance" is always available for logged-in employees
@@ -110,14 +113,9 @@ export function SidebarNav() {
     }
 
     // Employees should never see the admin pages
-    const adminPages = ['employees', 'settings', 'qr-code', 'payroll', 'payroll-history'];
+    const adminPages = ['employees', 'settings', 'qr-code', 'payroll', 'payroll-history', 'dashboard'];
     const employeeVisibleScreens = allScreens.filter(screen => allowed.includes(screen.id) && !adminPages.includes(screen.id));
     
-    // Make sure dashboard is only for admins
-    if (employeeVisibleScreens.some(s => s.id === 'dashboard')) {
-        return employeeVisibleScreens.filter(s => s.id !== 'dashboard');
-    }
-
     return employeeVisibleScreens;
   }, [employeeData, isSuperUser, isUserLoading, isEmployeeLoading]);
 
