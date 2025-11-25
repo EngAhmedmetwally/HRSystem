@@ -24,7 +24,7 @@ export default function LoginPage() {
   const auth = useAuth();
   const { user, isUserLoading } = useUser();
   
-  const [email, setEmail] = useState('');
+  const [identifier, setIdentifier] = useState('');
   const [password, setPassword] = useState('');
   const [isLoading, setIsLoading] = useState(false);
 
@@ -43,16 +43,19 @@ export default function LoginPage() {
     }
     setIsLoading(true);
 
+    // Simple logic to handle 'Admin' username
+    const emailToLogin = identifier.toLowerCase() === 'admin' ? 'admin@highclass.com' : identifier;
+
     try {
-        await signInWithEmailAndPassword(auth, email, password);
+        await signInWithEmailAndPassword(auth, emailToLogin, password);
         toast({
           title: 'تم تسجيل الدخول بنجاح',
         });
         // The useUser hook will detect the new user state and the useEffect above will redirect
       } catch (error: any) {
         let description = 'حدث خطأ غير متوقع.';
-        if (error.code === 'auth/user-not-found' || error.code === 'auth/wrong-password' || error.code === 'auth/invalid-credential') {
-          description = 'البريد الإلكتروني أو كلمة المرور غير صحيحة.';
+        if (error.code === 'auth/user-not-found' || error.code === 'auth/wrong-password' || error.code === 'auth/invalid-credential' || error.code === 'auth/invalid-email') {
+          description = 'اسم المستخدم أو كلمة المرور غير صحيحة.';
         }
         toast({
           variant: 'destructive',
@@ -90,13 +93,13 @@ export default function LoginPage() {
         <form onSubmit={handleSubmit}>
           <CardContent className="space-y-4">
             <div className="space-y-2">
-              <Label htmlFor="email">البريد الإلكتروني</Label>
+              <Label htmlFor="identifier">اسم المستخدم أو البريد الإلكتروني</Label>
               <Input
-                id="email"
-                type="email"
-                placeholder="example@company.com"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
+                id="identifier"
+                type="text"
+                placeholder="Admin"
+                value={identifier}
+                onChange={(e) => setIdentifier(e.target.value)}
                 required
                 dir="ltr"
               />
