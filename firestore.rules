@@ -131,12 +131,12 @@ service cloud.firestore {
 
     /**
      * @description Manages employee profile documents. An employee can manage their own profile.
-     * The Super User can read any employee profile but cannot list all of them at the root level to prevent enumeration.
+     * The Super User can read any employee profile and list all employees.
      * @path /employees/{employeeId}
      */
     match /employees/{employeeId} {
       allow get: if canRead(employeeId);
-      allow list: if false; // Prevent listing all employees by anyone.
+      allow list: if isSuperUser(); // Allow super user to list all employees
       allow create: if isOwner(employeeId) && hasValidEmployeeDataOnCreate(employeeId);
       allow update: if isExistingOwner(employeeId) && isEmployeeIdFieldImmutable();
       allow delete: if isExistingOwner(employeeId);
