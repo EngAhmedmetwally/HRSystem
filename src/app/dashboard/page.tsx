@@ -16,30 +16,45 @@ import {
   ResponsiveContainer,
 } from 'recharts';
 import { Users, UserCheck, UserX, CalendarOff, Loader2 } from 'lucide-react';
-import { useFirestore, useCollection, useMemoFirebase, errorEmitter, FirestorePermissionError } from '@/firebase';
+import { useFirestore, useCollection, useMemoFirebase, errorEmitter, FirestorePermissionError, useUser } from '@/firebase';
 import { collection, query, where, getDocs, Timestamp } from 'firebase/firestore';
 import type { Employee, AttendanceRecord } from '@/lib/types';
 import { useEffect, useState, useMemo } from 'react';
 import { format, eachDayOfInterval, startOfWeek, endOfWeek } from 'date-fns';
 import { ar } from 'date-fns/locale';
+import { useRouter } from 'next/navigation';
 
 export default function DashboardPage() {
   const firestore = useFirestore();
+  const { user, isUserLoading } = useUser();
+  const router = useRouter();
 
-  const employeesCollectionRef = useMemoFirebase(() => firestore ? collection(firestore, 'employees') : null, [firestore]);
+  const isSuperUser = useMemo(() => user?.email === 'admin@highclass.com' || user?.email === 'qdmin@highclass.com', [user]);
+
+  // Redirect regular users to their own attendance page
+  useEffect(() => {
+    if (!isUserLoading && user && !isSuperUser) {
+      router.replace('/dashboard/my-attendance');
+    }
+  }, [isUserLoading, user, isSuperUser, router]);
+
+  const employeesCollectionRef = useMemoFirebase(() => (firestore && isSuperUser) ? collection(firestore, 'employees') : null, [firestore, isSuperUser]);
   const { data: employees, isLoading: employeesLoading } = useCollection<Employee>(employeesCollectionRef);
   
   const todayStr = format(new Date(), 'yyyy-MM-dd');
   const attendanceTodayQuery = useMemoFirebase(() => {
-    return firestore ? query(collection(firestore, 'attendance'), where('date', '==', todayStr)) : null;
-  }, [firestore, todayStr]);
+    return (firestore && isSuperUser) ? query(collection(firestore, 'attendance'), where('date', '==', todayStr)) : null;
+  }, [firestore, todayStr, isSuperUser]);
   const { data: attendanceToday, isLoading: todayAttendanceLoading } = useCollection<AttendanceRecord>(attendanceTodayQuery);
   
   const [weeklyAttendance, setWeeklyAttendance] = useState<any[]>([]);
   const [weeklyLoading, setWeeklyLoading] = useState(true);
 
   useEffect(() => {
-    if (!firestore) return;
+    if (!firestore || !isSuperUser) {
+        setWeeklyLoading(false);
+        return;
+    };
 
     const fetchWeeklyData = async () => {
         setWeeklyLoading(true);
@@ -91,7 +106,7 @@ export default function DashboardPage() {
     
     fetchWeeklyData();
 
-  }, [firestore]);
+  }, [firestore, isSuperUser]);
 
 
   const todayStats = useMemo(() => {
@@ -111,6 +126,15 @@ export default function DashboardPage() {
     { title: 'الغياب اليومي', value: todayStats.absent, icon: UserX, color: 'text-red-500' },
     { title: 'في إجازة', value: todayStats.onLeave, icon: CalendarOff, color: 'text-yellow-500' },
   ];
+  
+  // Render loading or nothing while redirecting
+  if (isUserLoading || !isSuperUser) {
+    return (
+      <div className="flex-1 space-y-4 p-4 md:p-8 pt-6 flex items-center justify-center">
+        <Loader2 className="h-12 w-12 animate-spin text-primary" />
+      </div>
+    );
+  }
 
   return (
     <div className="flex-1 space-y-4 p-4 md:p-8 pt-6">
