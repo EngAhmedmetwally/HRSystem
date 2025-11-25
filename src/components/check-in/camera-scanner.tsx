@@ -13,12 +13,26 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 import { cn } from '@/lib/utils';
+import { useRouter } from 'next/navigation';
 
 export function CameraScanner() {
   const videoRef = useRef<HTMLVideoElement>(null);
-  const [cameraStatus, setCameraStatus] = useState<'loading' | 'active' | 'error' | 'inactive'>('inactive');
+  const streamRef = useRef<MediaStream | null>(null);
+  const [cameraStatus, setCameraStatus] = useState<'loading' | 'active' | 'error' | 'inactive'>('loading');
   const [showSuccess, setShowSuccess] = useState(false);
   const [successMessage, setSuccessMessage] = useState({ title: '', description: '' });
+  const router = useRouter();
+
+
+  const stopCamera = () => {
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach(track => track.stop());
+      streamRef.current = null;
+      if(videoRef.current) {
+        videoRef.current.srcObject = null;
+      }
+    }
+  };
 
   const startCamera = async () => {
     setCameraStatus('loading');
@@ -27,6 +41,7 @@ export function CameraScanner() {
         const stream = await navigator.mediaDevices.getUserMedia({
           video: { facingMode: 'environment' },
         });
+        streamRef.current = stream;
         if (videoRef.current) {
           videoRef.current.srcObject = stream;
           setCameraStatus('active');
@@ -42,11 +57,10 @@ export function CameraScanner() {
 
   useEffect(() => {
     startCamera();
+    
+    // Cleanup function to stop the camera when the component unmounts
     return () => {
-      if (videoRef.current && videoRef.current.srcObject) {
-        const stream = videoRef.current.srcObject as MediaStream;
-        stream.getTracks().forEach(track => track.stop());
-      }
+      stopCamera();
     };
   }, []);
 
@@ -58,6 +72,12 @@ export function CameraScanner() {
     });
     setShowSuccess(true);
   };
+  
+  const onDialogClose = () => {
+    setShowSuccess(false);
+    // Optionally, you can add navigation logic here if needed after closing the dialog.
+    // For example: router.push('/dashboard');
+  }
 
   const CameraOverlay = () => {
     switch (cameraStatus) {
@@ -127,7 +147,7 @@ export function CameraScanner() {
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogAction>حسنًا</AlertDialogAction>
+            <AlertDialogAction onClick={onDialogClose}>حسنًا</AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>

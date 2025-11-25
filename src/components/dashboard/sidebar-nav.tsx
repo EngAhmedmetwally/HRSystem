@@ -44,6 +44,7 @@ const navItems = [
   { href: '/dashboard/employees', icon: UserPlus, label: 'الموظفين' },
   { href: '/dashboard/qr-code', icon: QrCode, label: 'رمز QR' },
   { href: '/dashboard/payroll', icon: Wallet, label: 'كشف المرتبات' },
+  { href: '/dashboard/settings', icon: Settings, label: 'الإعدادات' },
 ];
 
 export function SidebarNav() {
