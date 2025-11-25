@@ -316,7 +316,7 @@ export default function EmployeesPage() {
                        `مخصص (${employee.workSchedule.startTime} - ${employee.workSchedule.endTime})`
                       }
                     </TableCell>
-                    <TableCell className="font-medium">{totalSalary.toLocaleString()} د.ع</TableCell>
+                    <TableCell className="font-medium">{totalSalary.toLocaleString()} ج.م</TableCell>
                   </TableRow>
                 );
               })}

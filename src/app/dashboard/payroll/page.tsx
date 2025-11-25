@@ -32,8 +32,8 @@ import { Download, Calculator } from 'lucide-react';
 // Mock data for payroll calculation
 const getPayrollData = (employees: Employee[]) => {
   return employees.map(emp => {
-    const deductions = Math.floor(Math.random() * 200000); // Random deductions
-    const overtime = Math.floor(Math.random() * 300000); // Random overtime
+    const deductions = Math.floor(Math.random() * 500); // Random deductions
+    const overtime = Math.floor(Math.random() * 1000); // Random overtime
     const grossPay = emp.salary.base + emp.salary.allowances;
     const netPay = grossPay - deductions + overtime;
     return {
@@ -130,10 +130,10 @@ export default function PayrollPage() {
                     {payrollData.map((record) => (
                       <TableRow key={record.id}>
                         <TableCell>{record.name}</TableCell>
-                        <TableCell>{record.grossPay.toLocaleString()} د.ع</TableCell>
-                        <TableCell className="text-green-600">{record.overtime.toLocaleString()} د.ع</TableCell>
-                        <TableCell className="text-destructive">{record.deductions.toLocaleString()} د.ع</TableCell>
-                        <TableCell className="font-bold">{record.netPay.toLocaleString()} د.ع</TableCell>
+                        <TableCell>{record.grossPay.toLocaleString()} ج.م</TableCell>
+                        <TableCell className="text-green-600">{record.overtime.toLocaleString()} ج.م</TableCell>
+                        <TableCell className="text-destructive">{record.deductions.toLocaleString()} ج.م</TableCell>
+                        <TableCell className="font-bold">{record.netPay.toLocaleString()} ج.م</TableCell>
                       </TableRow>
                     ))}
                   </TableBody>
