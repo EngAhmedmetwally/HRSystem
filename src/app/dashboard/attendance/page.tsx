@@ -27,7 +27,7 @@ import type { AttendanceRecord } from '@/lib/types';
 
 export default function AttendancePage() {
   const [dateRange, setDateRange] = useState<DateRange | undefined>(undefined);
-  const [selectedEmployee, setSelectedEmployee] = useState<string>('');
+  const [selectedEmployee, setSelectedEmployee] = useState<string>('all');
 
   const getStatusVariant = (status: 'حاضر' | 'غائب' | 'في إجازة') => {
     switch (status) {
@@ -44,15 +44,17 @@ export default function AttendancePage() {
     return attendanceRecords.filter((record) => {
       const recordDate = new Date(record.date);
       const isDateInRange = !dateRange?.from || (recordDate >= dateRange.from && (!dateRange.to || recordDate <= dateRange.to));
-      const isEmployeeMatch = !selectedEmployee || record.employee.id === selectedEmployee;
+      const isEmployeeMatch = selectedEmployee === 'all' || record.employee.id === selectedEmployee;
       return isDateInRange && isEmployeeMatch;
     });
   }, [dateRange, selectedEmployee]);
   
   const clearFilters = () => {
     setDateRange(undefined);
-    setSelectedEmployee('');
+    setSelectedEmployee('all');
   };
+
+  const hasActiveFilters = dateRange !== undefined || selectedEmployee !== 'all';
 
   return (
     <div className="flex-1 space-y-4 p-4 md:p-8 pt-6">
@@ -109,14 +111,14 @@ export default function AttendancePage() {
                   <SelectValue placeholder="اختر الموظف" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">كل الموظفين</SelectItem>
+                  <SelectItem value="all">كل الموظفين</SelectItem>
                   {employees.map(emp => (
                     <SelectItem key={emp.id} value={emp.id}>{emp.name}</SelectItem>
                   ))}
                 </SelectContent>
               </Select>
               
-               {(dateRange || selectedEmployee) && (
+               {hasActiveFilters && (
                  <Button variant="ghost" onClick={clearFilters} className="text-muted-foreground">
                    <FilterX className="ml-2 h-4 w-4" />
                     مسح الفلاتر
