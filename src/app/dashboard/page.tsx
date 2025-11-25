@@ -16,7 +16,7 @@ import {
   ResponsiveContainer,
 } from 'recharts';
 import { Users, UserCheck, UserX, CalendarOff, Loader2 } from 'lucide-react';
-import { useFirestore, useCollection, useMemoFirebase } from '@/firebase';
+import { useFirestore, useCollection, useMemoFirebase, errorEmitter, FirestorePermissionError } from '@/firebase';
 import { collection, query, where, getDocs, Timestamp } from 'firebase/firestore';
 import type { Employee, AttendanceRecord } from '@/lib/types';
 import { useEffect, useState, useMemo } from 'react';
@@ -49,12 +49,22 @@ export default function DashboardPage() {
 
         const weekDays = eachDayOfInterval({ start: weekStart, end: weekEnd });
 
-        const weeklyData = await Promise.all(weekDays.map(async (day) => {
+        const weeklyDataPromises = weekDays.map(async (day) => {
             const dayStr = format(day, 'yyyy-MM-dd');
             const dayName = format(day, 'EEEE', { locale: ar });
 
-            const q = query(collection(firestore, 'attendance'), where('date', '==', dayStr));
-            const snapshot = await getDocs(q);
+            const attendanceCollectionRef = collection(firestore, 'attendance');
+            const q = query(attendanceCollectionRef, where('date', '==', dayStr));
+            
+            const snapshot = await getDocs(q).catch(serverError => {
+                 const permissionError = new FirestorePermissionError({
+                    path: attendanceCollectionRef.path,
+                    operation: 'list',
+                });
+                errorEmitter.emit('permission-error', permissionError);
+                // Return an empty snapshot or re-throw to stop processing
+                throw permissionError;
+            });
             
             let present = 0;
             let absent = 0;
@@ -66,10 +76,18 @@ export default function DashboardPage() {
             });
             
             return { day: dayName, 'حاضر': present, 'غائب': absent };
-        }));
+        });
 
-        setWeeklyAttendance(weeklyData);
-        setWeeklyLoading(false);
+        try {
+            const weeklyData = await Promise.all(weeklyDataPromises);
+            setWeeklyAttendance(weeklyData);
+        } catch (error) {
+            console.error("Failed to fetch weekly attendance due to permissions or other error.");
+            // Error is already emitted, just need to handle UI state
+            setWeeklyAttendance([]);
+        } finally {
+            setWeeklyLoading(false);
+        }
     }
     
     fetchWeeklyData();
