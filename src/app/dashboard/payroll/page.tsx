@@ -1,6 +1,7 @@
 'use client';
 
-import { useFormState, useFormStatus } from 'react-dom';
+import { useActionState, useOptimistic } from 'react';
+import { useFormStatus } from 'react-dom';
 import { handlePayrollGeneration } from './actions';
 import { Button } from '@/components/ui/button';
 import {
@@ -38,7 +39,7 @@ function SubmitButton() {
 }
 
 export default function PayrollPage() {
-  const [state, formAction] = useFormState(handlePayrollGeneration, initialState);
+  const [state, formAction] = useActionState(handlePayrollGeneration, initialState);
   const { toast } = useToast();
   const [payrollPeriod, setPayrollPeriod] = useState('');
 
