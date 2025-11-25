@@ -21,7 +21,7 @@ import { format } from 'date-fns';
 import { ar } from 'date-fns/locale';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useSearchParams } from 'next/navigation';
-import { useFirestore, useCollection, useMemoFirebase } from '@/firebase';
+import { useFirestore, useCollection, useMemoFirebase, useUser } from '@/firebase';
 import { collection, query, where, Timestamp } from 'firebase/firestore';
 import type { AttendanceRecord, Employee } from '@/lib/types';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -47,50 +47,66 @@ function AttendanceTableSkeleton() {
 export default function AttendancePage() {
   const searchParams = useSearchParams();
   const firestore = useFirestore();
+  const { user } = useUser();
+  const isSuperUser = user?.email === 'admin@highclass.com' || user?.email === 'qdmin@highclass.com';
+
 
   const [startDate, setStartDate] = useState<Date | undefined>(undefined);
   const [endDate, setEndDate] = useState<Date | undefined>(undefined);
   const [selectedEmployee, setSelectedEmployee] = useState<string>('all');
   
-  const { data: employees, isLoading: employeesLoading } = useCollection<Employee>(
-      useMemoFirebase(() => firestore ? collection(firestore, 'employees') : null, [firestore])
+  const employeesCollectionRef = useMemoFirebase(
+    () => (firestore && isSuperUser) ? collection(firestore, 'employees') : null,
+    [firestore, isSuperUser]
   );
+  const { data: employees, isLoading: employeesLoading } = useCollection<Employee>(employeesCollectionRef);
+  
+  // For non-admins, we need to get their own employee data to show their name
+  const selfEmployeeDocRef = useMemoFirebase(() => (firestore && !isSuperUser && user) ? doc(firestore, 'employees', user.uid) : null, [firestore, isSuperUser, user]);
+  const { data: selfEmployee, isLoading: selfEmployeeLoading } = useDoc<Employee>(selfEmployeeDocRef);
 
   const attendanceQuery = useMemoFirebase(() => {
-    if (!firestore) return null;
+    if (!firestore || !user) return null;
     let q = query(collection(firestore, 'attendance'));
 
-    if (startDate) {
-        q = query(q, where('date', '>=', format(startDate, 'yyyy-MM-dd')));
-    }
-    if (endDate) {
-        q = query(q, where('date', '<=', format(endDate, 'yyyy-MM-dd')));
-    }
-    if (selectedEmployee !== 'all') {
-        q = query(q, where('employeeId', '==', selectedEmployee));
+    if (isSuperUser) {
+        if (startDate) {
+            q = query(q, where('date', '>=', format(startDate, 'yyyy-MM-dd')));
+        }
+        if (endDate) {
+            q = query(q, where('date', '<=', format(endDate, 'yyyy-MM-dd')));
+        }
+        if (selectedEmployee !== 'all') {
+            q = query(q, where('employeeId', '==', selectedEmployee));
+        }
+    } else {
+        // Regular user only sees their own records
+        q = query(q, where('employeeId', '==', user.uid));
     }
     
     return q;
-  }, [firestore, startDate, endDate, selectedEmployee]);
+  }, [firestore, startDate, endDate, selectedEmployee, isSuperUser, user]);
 
   const { data: attendanceRecords, isLoading: attendanceLoading } = useCollection<AttendanceRecord>(attendanceQuery);
 
 
   useEffect(() => {
-    const employeeId = searchParams.get('employeeId');
-    const urlStartDate = searchParams.get('startDate');
-    const urlEndDate = searchParams.get('endDate');
+    if (isSuperUser) {
+        const employeeId = searchParams.get('employeeId');
+        const urlStartDate = searchParams.get('startDate');
+        const urlEndDate = searchParams.get('endDate');
 
-    if (employeeId) {
-        setSelectedEmployee(employeeId);
+        if (employeeId) {
+            setSelectedEmployee(employeeId);
+        }
+        if (urlStartDate) {
+            setStartDate(new Date(urlStartDate));
+        }
+        if (urlEndDate) {
+            setEndDate(new Date(urlEndDate));
+        }
     }
-    if (urlStartDate) {
-        setStartDate(new Date(urlStartDate));
-    }
-    if (urlEndDate) {
-        setEndDate(new Date(urlEndDate));
-    }
-  }, [searchParams]);
+  }, [searchParams, isSuperUser]);
 
   const getStatusVariant = (status: 'حاضر' | 'غائب' | 'في إجازة') => {
     switch (status) {
@@ -110,19 +126,24 @@ export default function AttendancePage() {
   };
 
   const hasActiveFilters = startDate !== undefined || endDate !== undefined || selectedEmployee !== 'all';
-  const isLoading = employeesLoading || attendanceLoading;
+  const isLoading = (isSuperUser && employeesLoading) || attendanceLoading || (!isSuperUser && selfEmployeeLoading);
+
+  const finalEmployeesList = isSuperUser ? employees : (selfEmployee ? [selfEmployee] : []);
 
   return (
     <div className="flex-1 space-y-4 p-4 md:p-8 pt-6">
       <div className="flex items-center justify-between space-y-2">
         <h2 className="text-3xl font-bold tracking-tight font-headline">
-          سجل الحضور
+          {isSuperUser ? 'سجل الحضور' : 'سجلي الكامل'}
         </h2>
       </div>
 
       <Card>
         <CardHeader>
-          <CardTitle>قائمة الحضور والانصراف</CardTitle>
+          <CardTitle>
+            {isSuperUser ? 'قائمة الحضور والانصراف' : 'قائمة حضوري وانصرافي'}
+          </CardTitle>
+           {isSuperUser && (
            <div className="flex flex-col sm:flex-row flex-wrap gap-4 items-center pt-4">
               <Popover>
                 <PopoverTrigger asChild>
@@ -192,6 +213,7 @@ export default function AttendancePage() {
                  </Button>
                )}
            </div>
+           )}
         </CardHeader>
         <CardContent>
             {isLoading ? (
@@ -210,7 +232,7 @@ export default function AttendancePage() {
             <TableBody>
               {attendanceRecords && attendanceRecords.length > 0 ? (
                 attendanceRecords.map((record) => {
-                  const employee = employees?.find(e => e.id === record.employeeId);
+                  const employee = finalEmployeesList?.find(e => e.id === record.employeeId);
                   return (
                   <TableRow key={record.id}>
                     <TableCell>

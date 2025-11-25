@@ -96,15 +96,22 @@ export function SidebarNav() {
       return allScreens.filter(s => s.id !== 'my-attendance');
     }
     // Regular employee logic
-    if (!employeeData) return [allScreens.find(s => s.id === 'my-attendance')].filter(Boolean); // Default for employee while loading
+    if (!employeeData) return []; // Return empty while loading employee data
     
     const allowed = employeeData.allowedScreens || [];
     // Ensure "My Attendance" is always available for logged-in employees
     if (!allowed.includes('my-attendance')) {
         allowed.push('my-attendance');
     }
-    // Employees should never see the main employees list page
-    const employeeVisibleScreens = allScreens.filter(screen => allowed.includes(screen.id) && screen.id !== 'employees');
+    
+    // The main attendance page is now handled to show only user data, so it's safe to show.
+    if (!allowed.includes('attendance')) {
+        allowed.push('attendance');
+    }
+
+    // Employees should never see the admin pages
+    const adminPages = ['employees', 'settings'];
+    const employeeVisibleScreens = allScreens.filter(screen => allowed.includes(screen.id) && !adminPages.includes(screen.id));
 
     return employeeVisibleScreens;
   }, [employeeData, isSuperUser]);
