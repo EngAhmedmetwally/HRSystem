@@ -34,3 +34,8 @@ export type AttendanceRecord = {
   checkOut: string | null;
   status: 'حاضر' | 'غائب' | 'في إجازة';
 };
+
+export type GeoLocation = {
+    latitude: number;
+    longitude: number;
+}
