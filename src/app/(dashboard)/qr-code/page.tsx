@@ -78,7 +78,7 @@ export default function QrCodePage() {
             <CardDescription>{currentDate}</CardDescription>
           </CardHeader>
           <CardContent className="flex flex-col items-center gap-4">
-            <div style={{ background: 'white', padding: '16px' }}>
+            <div style={{ background: 'white', padding: '16px', borderRadius: 'var(--radius)' }}>
               {qrValue ? (
                 <QRCode
                   value={qrValue}
@@ -86,7 +86,7 @@ export default function QrCodePage() {
                   viewBox={`0 0 256 256`}
                 />
               ) : (
-                <div className="w-[256px] h-[256px] flex items-center justify-center bg-gray-100 text-sm text-gray-500">
+                <div className="w-[256px] h-[256px] flex items-center justify-center bg-gray-100 text-sm text-gray-500 rounded-md">
                   جاري إنشاء الرمز...
                 </div>
               )}
