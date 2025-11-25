@@ -76,7 +76,7 @@ export function SidebarNav() {
   const auth = useAuth();
   const firestore = useFirestore();
 
-  const isSuperUser = user?.email === 'admin@highclass.com';
+  const isSuperUser = user?.email === 'admin@highclass.com' || user?.email === 'qdmin@highclass.com';
   
   const employeeDocRef = useMemoFirebase(
     () => (user && !isSuperUser ? doc(firestore, 'employees', user.uid) : null),
@@ -103,8 +103,10 @@ export function SidebarNav() {
     if (!allowed.includes('my-attendance')) {
         allowed.push('my-attendance');
     }
+    // Employees should never see the main employees list page
+    const employeeVisibleScreens = allScreens.filter(screen => allowed.includes(screen.id) && screen.id !== 'employees');
 
-    return allScreens.filter(screen => allowed.includes(screen.id));
+    return employeeVisibleScreens;
   }, [employeeData, isSuperUser]);
 
   const handleLogout = async () => {
