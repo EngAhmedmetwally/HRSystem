@@ -1,0 +1,266 @@
+{
+  "entities": {
+    "Employee": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "Employee",
+      "type": "object",
+      "description": "Represents an employee within the HighClass HR Automation system.",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique identifier for the Employee entity."
+        },
+        "firstName": {
+          "type": "string",
+          "description": "The employee's first name."
+        },
+        "lastName": {
+          "type": "string",
+          "description": "The employee's last name."
+        },
+        "employeeId": {
+          "type": "string",
+          "description": "The employee's work ID, which is unique."
+        },
+        "email": {
+          "type": "string",
+          "description": "The employee's email address.",
+          "format": "email"
+        },
+        "department": {
+          "type": "string",
+          "description": "The department the employee belongs to."
+        },
+        "jobTitle": {
+          "type": "string",
+          "description": "The employee's job title."
+        }
+      },
+      "required": [
+        "id",
+        "firstName",
+        "lastName",
+        "employeeId",
+        "email",
+        "department",
+        "jobTitle"
+      ]
+    },
+    "AttendanceRecord": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "AttendanceRecord",
+      "type": "object",
+      "description": "Represents an attendance record for an employee.",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique identifier for the AttendanceRecord entity."
+        },
+        "employeeId": {
+          "type": "string",
+          "description": "Reference to Employee. (Relationship: Employee 1:N AttendanceRecord)"
+        },
+        "checkInTime": {
+          "type": "string",
+          "description": "The time the employee checked in.",
+          "format": "date-time"
+        },
+        "checkOutTime": {
+          "type": "string",
+          "description": "The time the employee checked out.",
+          "format": "date-time"
+        },
+        "qrCodeId": {
+          "type": "string",
+          "description": "Reference to the QR code used for check-in/out. (Relationship: QRCode 1:N AttendanceRecord)"
+        },
+        "date": {
+          "type": "string",
+          "description": "The date of the attendance record."
+        }
+      },
+      "required": [
+        "id",
+        "employeeId",
+        "checkInTime",
+        "checkOutTime",
+        "qrCodeId",
+        "date"
+      ]
+    },
+    "QRCode": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "QRCode",
+      "type": "object",
+      "description": "Represents a dynamic QR code generated for attendance tracking.",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique identifier for the QRCode entity."
+        },
+        "code": {
+          "type": "string",
+          "description": "The QR code itself (string representation)."
+        },
+        "generationTime": {
+          "type": "string",
+          "description": "The time the QR code was generated.",
+          "format": "date-time"
+        },
+        "validUntil": {
+          "type": "string",
+          "description": "The time the QR code is valid until.",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "id",
+        "code",
+        "generationTime",
+        "validUntil"
+      ]
+    },
+    "PayrollRecord": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "PayrollRecord",
+      "type": "object",
+      "description": "Represents a payroll record for an employee for a specific period.",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique identifier for the PayrollRecord entity."
+        },
+        "employeeId": {
+          "type": "string",
+          "description": "Reference to Employee. (Relationship: Employee 1:N PayrollRecord)"
+        },
+        "periodStartDate": {
+          "type": "string",
+          "description": "The start date of the payroll period.",
+          "format": "date-time"
+        },
+        "periodEndDate": {
+          "type": "string",
+          "description": "The end date of the payroll period.",
+          "format": "date-time"
+        },
+        "grossPay": {
+          "type": "number",
+          "description": "The employee's gross pay for the period."
+        },
+        "deductions": {
+          "type": "number",
+          "description": "Total deductions for the period."
+        },
+        "netPay": {
+          "type": "number",
+          "description": "The employee's net pay for the period."
+        }
+      },
+      "required": [
+        "id",
+        "employeeId",
+        "periodStartDate",
+        "periodEndDate",
+        "grossPay",
+        "deductions",
+        "netPay"
+      ]
+    }
+  },
+  "auth": {
+    "providers": [
+      "password",
+      "anonymous"
+    ]
+  },
+  "firestore": {
+    "structure": [
+      {
+        "path": "/employees/{employeeId}",
+        "definition": {
+          "entityName": "Employee",
+          "schema": {
+            "$ref": "#/backend/entities/Employee"
+          },
+          "description": "Stores employee profiles. Access is limited to the employee themselves and authorized HR personnel.",
+          "params": [
+            {
+              "name": "employeeId",
+              "description": "The unique identifier of the employee."
+            }
+          ]
+        }
+      },
+      {
+        "path": "/employees/{employeeId}/attendance/{attendanceId}",
+        "definition": {
+          "entityName": "AttendanceRecord",
+          "schema": {
+            "$ref": "#/backend/entities/AttendanceRecord"
+          },
+          "description": "Stores attendance records for each employee. Includes denormalized 'employeeId' for authorization independence.",
+          "params": [
+            {
+              "name": "employeeId",
+              "description": "The unique identifier of the employee."
+            },
+            {
+              "name": "attendanceId",
+              "description": "The unique identifier of the attendance record."
+            }
+          ]
+        }
+      },
+      {
+        "path": "/qrcodes/{qrcodeId}",
+        "definition": {
+          "entityName": "QRCode",
+          "schema": {
+            "$ref": "#/backend/entities/QRCode"
+          },
+          "description": "Stores generated QR codes. Access is restricted to authorized personnel.",
+          "params": [
+            {
+              "name": "qrcodeId",
+              "description": "The unique identifier of the QR code."
+            }
+          ]
+        }
+      },
+      {
+        "path": "/payroll_records/{payrollRecordId}",
+        "definition": {
+          "entityName": "PayrollRecord",
+          "schema": {
+            "$ref": "#/backend/entities/PayrollRecord"
+          },
+          "description": "Stores payroll records. Access is limited to authorized personnel and the employee themselves.",
+          "params": [
+            {
+              "name": "payrollRecordId",
+              "description": "The unique identifier of the payroll record."
+            }
+          ]
+        }
+      },
+      {
+        "path": "/roles_admin/{uid}",
+        "definition": {
+          "entityName": "role",
+          "schema": {
+            "$ref": "#/backend/entities/Employee"
+          },
+          "description": "Grants admin roles to users based on the existence of a document.",
+          "params": [
+            {
+              "name": "uid",
+              "description": "The Firebase Authentication UID of the administrator."
+            }
+          ]
+        }
+      }
+    ],
+    "reasoning": "The Firestore data structure is designed to support a secure and scalable HighClass HR Automation system. The structure emphasizes authorization independence and clear access patterns. The design avoids `get()` calls in security rules to ensure atomic operations and easier debugging.\n\n**Structure Overview:**\n\n1.  **/employees/{employeeId}**: Stores employee profiles. Access is limited to the employee themselves and authorized HR personnel (administrators).\n2.  **/employees/{employeeId}/attendance/{attendanceId}**: Stores attendance records for each employee. This nested structure enforces ownership and allows for efficient querying of attendance data for a specific employee.\n3.  **/qrcodes/{qrcodeId}**: Stores the generated QR codes. Access is restricted to authorized personnel who can generate and manage QR codes.\n4.  **/payroll_records/{payrollRecordId}**: Stores payroll records. Access is limited to authorized personnel and the employee themselves.\n5.  **/roles_admin/{uid}**: Used to grant admin roles to users. The existence of a document in this collection grants admin privileges.\n\n**Authorization Independence and Denormalization:**\n\nThe most critical aspect is ensuring Authorization Independence. For attendance records, the `employeeId` is included in each `AttendanceRecord` document. This ensures that security rules can validate the relationship between an employee and their attendance records without needing to `get()` the employee document.\n\n**QAPs (Rules are not Filters):**\n\nThe structure supports secure `list` operations (QAPs) as follows:\n\n*   **Employees:** Listing employees is generally restricted. If listing is required, it would be done through a Cloud Function with appropriate authorization checks.\n*   **Attendance Records:** Listing attendance records is done within the scope of a specific employee (`/employees/{employeeId}/attendance/{attendanceId}`). The security rules ensure that only the employee or authorized personnel can list these records, and they cannot list records from other employees.\n*   **QR Codes:** Listing QR codes is restricted to authorized personnel.\n*   **Payroll Records:** Similar to attendance records, listing payroll records is done within the scope of a specific payroll_records (`/payroll_records/{payrollRecordId}`).\n\n**Denormalization Explanation:**\n\nTo enforce the security rules without relying on hierarchical `get()` calls, the `AttendanceRecord` document includes the `employeeId`. While this involves data duplication, it dramatically simplifies security rules and enhances the scalability and robustness of the application. Similarly, if attendance records had to be restricted to certain departments, this information should also be duplicated on the attendance record.\n\nThis design aligns with the principle of Authorization Independence by denormalizing relevant authorization data, thus creating a secure and efficient system."
+  }
+}
