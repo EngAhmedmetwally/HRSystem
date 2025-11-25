@@ -1,6 +1,25 @@
 import { SidebarProvider, SidebarInset, SidebarTrigger } from '@/components/ui/sidebar';
 import { SidebarNav } from '@/components/dashboard/sidebar-nav';
 import { Menu } from 'lucide-react';
+import { Suspense } from 'react';
+import { Skeleton } from '@/components/ui/skeleton';
+
+function DashboardLoading() {
+    return (
+        <div className="flex-1 space-y-4 p-4 md:p-8 pt-6">
+            <Skeleton className="h-8 w-1/4" />
+            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+                <Skeleton className="h-24" />
+                <Skeleton className="h-24" />
+                <Skeleton className="h-24" />
+                <Skeleton className="h-24" />
+            </div>
+            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-7">
+                <Skeleton className="col-span-1 lg:col-span-4 h-[350px]" />
+            </div>
+        </div>
+    )
+}
 
 export default function DashboardLayout({
   children,
@@ -16,7 +35,9 @@ export default function DashboardLayout({
              <Menu className="h-6 w-6" />
           </SidebarTrigger>
         </header>
-        {children}
+        <Suspense fallback={<DashboardLoading />}>
+          {children}
+        </Suspense>
       </SidebarInset>
     </SidebarProvider>
   );

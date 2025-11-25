@@ -33,7 +33,6 @@ import {
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
-import { employees } from '@/lib/mock-data';
 
 export function SidebarNav() {
   const pathname = usePathname();
@@ -48,18 +47,20 @@ export function SidebarNav() {
     const userJson = localStorage.getItem('currentUser');
     if (userJson) {
       const user = JSON.parse(userJson);
-      setCurrentUser(user);
-
-      const allowed = allScreens.filter(screen => user.allowedScreens?.includes(screen.id));
-      setVisibleScreens(allowed);
+      if (!currentUser || currentUser.username !== user.username) {
+        setCurrentUser(user);
+        const allowed = allScreens.filter(screen => user.allowedScreens?.includes(screen.id));
+        setVisibleScreens(allowed);
+      }
     } else {
       // If no user, maybe redirect to login
       router.push('/login');
     }
-  }, [pathname, router]);
+  }, [pathname, router, currentUser]);
 
   const handleLogout = () => {
     localStorage.removeItem('currentUser');
+    setCurrentUser(null);
     router.push('/login');
   };
 
