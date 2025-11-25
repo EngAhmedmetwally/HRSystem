@@ -31,7 +31,7 @@ export default function LoginPage() {
     // Simulate network delay
     setTimeout(() => {
       // Special case for hardcoded admin user
-      if (username === 'admin@highclass.com' && password === 'admin102030') {
+      if (username === 'Admin' && password === 'admin102030') {
         toast({
           title: 'تم تسجيل الدخول بنجاح',
           description: 'مرحباً بعودتك أيها المدير!',
@@ -40,6 +40,7 @@ export default function LoginPage() {
         // For now, we'll store a mock user in localStorage.
         localStorage.setItem('currentUser', JSON.stringify({
             name: 'Admin',
+            username: 'Admin',
             role: 'Administrator',
             allowedScreens: ['dashboard', 'attendance', 'employees', 'qr-code', 'payroll', 'settings']
         }));
