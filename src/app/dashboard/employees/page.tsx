@@ -169,12 +169,12 @@ export default function EmployeesPage() {
                 return;
             }
             
-            // 1. Create user in Firebase Auth
+            // 1. Always create user in Firebase Auth first
             const auth = getAuth();
             const userCredential = await createUserWithEmailAndPassword(auth, data.email, data.password);
             const newUserId = userCredential.user.uid;
 
-            // 2. Create employee document in Firestore ONLY if it's not the admin user
+            // 2. Create employee document in Firestore ONLY if it's NOT the admin user
             if (data.email.toLowerCase() !== 'admin@highclass.com') {
                 const newEmployeeDocRef = doc(firestore, 'employees', newUserId);
                 const newEmployee: Omit<Employee, 'id'> = {
