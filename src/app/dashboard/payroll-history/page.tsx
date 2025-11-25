@@ -25,7 +25,7 @@ import {
   AccordionItem,
   AccordionTrigger,
 } from "@/components/ui/accordion"
-import { useCollection } from '@/firebase';
+import { useCollection, useMemoFirebase } from '@/firebase';
 import { collection, query, orderBy } from 'firebase/firestore';
 import { useFirestore } from '@/firebase';
 import { format } from 'date-fns';

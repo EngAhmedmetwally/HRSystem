@@ -9,25 +9,24 @@ import {
   CardDescription,
 } from '@/components/ui/card';
 import QRCode from 'react-qr-code';
+import { useFirestore, useDoc, useMemoFirebase } from '@/firebase';
+import { doc } from 'firebase/firestore';
+import type { SystemSettings } from '@/lib/types';
 
 const DEFAULT_QR_LIFESPAN = 15; // in seconds
 
 export default function QrCodePage() {
   const [currentDate, setCurrentDate] = useState('');
   const [qrValue, setQrValue] = useState('');
-  const [qrLifespan, setQrLifespan] = useState(DEFAULT_QR_LIFESPAN);
   const intervalRef = useRef<NodeJS.Timeout | null>(null);
 
-  useEffect(() => {
-    // Load custom settings from localStorage
-    const savedSettings = localStorage.getItem('app-settings');
-    if (savedSettings) {
-        const settings = JSON.parse(savedSettings);
-        if (settings.qrCodeLifespan) {
-            setQrLifespan(settings.qrCodeLifespan);
-        }
-    }
+  const firestore = useFirestore();
+  const settingsDocRef = useMemoFirebase(() => firestore ? doc(firestore, 'settings', 'main') : null, [firestore]);
+  const { data: settings } = useDoc<SystemSettings>(settingsDocRef);
+  
+  const qrLifespan = settings?.qrCodeLifespan ?? DEFAULT_QR_LIFESPAN;
 
+  useEffect(() => {
     const today = new Date();
     const options: Intl.DateTimeFormatOptions = {
       weekday: 'long',

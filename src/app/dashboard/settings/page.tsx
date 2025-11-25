@@ -33,8 +33,8 @@ const settingsSchema = z.object({
   gracePeriodType: z.enum(['daily', 'monthly']),
   deductionRules: z.array(deductionRuleSchema),
   enableGeolocation: z.boolean(),
-  companyLatitude: z.coerce.number().min(-90, 'قيمة غير صالحة').max(90, 'قيمة غير صالحة'),
-  companyLongitude: z.coerce.number().min(-180, 'قيمة غير صالحة').max(180, 'قيمة غير صالحة'),
+  companyLatitude: z.coerce.number().min(-90, 'قيمة غير صالحة').max(90, 'قيمة غير صالحة').optional(),
+  companyLongitude: z.coerce.number().min(-180, 'قيمة غير صالحة').max(180, 'قيمة غير صالحة').optional(),
   allowedRadiusMeters: z.coerce.number().min(5, 'يجب أن يكون النطاق 5 أمتار على الأقل'),
   qrCodeLifespan: z.coerce.number().min(5, 'يجب أن تكون المدة 5 ثوان على الأقل'),
 });

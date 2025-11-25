@@ -1,4 +1,3 @@
-
 'use client';
 
 import { useState, useRef, useEffect } from 'react';
@@ -16,20 +15,21 @@ import {
 import { cn } from '@/lib/utils';
 import jsQR from 'jsqr';
 import { useToast } from '@/hooks/use-toast';
-import type { GeoLocation, Employee } from '@/lib/types';
+import type { Employee, SystemSettings, AttendanceRecord } from '@/lib/types';
 import { useRouter } from 'next/navigation';
+import { useUser, useFirestore, useDoc, useMemoFirebase, addDocumentNonBlocking, setDocumentNonBlocking } from '@/firebase';
+import { doc, getDoc, Timestamp, collection, query, where, getDocs, limit } from 'firebase/firestore';
+import { format } from 'date-fns';
 
-
-type CameraStatus = 'loading' | 'active' | 'error' | 'inactive' | 'validating' | 'geolocating';
 
 // --- Configuration ---
-const DEFAULT_COMPANY_LOCATION: GeoLocation = {
-  latitude: 30.0444, // Cairo
-  longitude: 31.2357,
-};
-const DEFAULT_ALLOWED_RADIUS_METERS = 200; // Allow check-in within 200 meters
-const DEFAULT_QR_LIFESPAN_MS = 15 * 1000; // 15 seconds
 const CHECK_IN_LOCKOUT_MS = 60 * 60 * 1000; // 1 hour
+
+type GeolocationCoords = {
+    latitude: number;
+    longitude: number;
+    accuracy: number;
+};
 
 export function CameraScanner() {
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -39,34 +39,16 @@ export function CameraScanner() {
   const { toast } = useToast();
   const router = useRouter();
 
-  const [cameraStatus, setCameraStatus] = useState<CameraStatus>('loading');
+  const { user } = useUser();
+  const firestore = useFirestore();
+
+  const [cameraStatus, setCameraStatus] = useState<'loading' | 'active' | 'error' | 'inactive' | 'validating' | 'geolocating'>('loading');
   const [dialog, setDialog] = useState<{ open: boolean; title: string; description: string; variant: 'success' | 'error' | 'info' }>({ open: false, title: '', description: '', variant: 'success' });
   
   // State for settings
-  const [companyLocation, setCompanyLocation] = useState<GeoLocation>(DEFAULT_COMPANY_LOCATION);
-  const [allowedRadius, setAllowedRadius] = useState(DEFAULT_ALLOWED_RADIUS_METERS);
-  const [qrLifespan, setQrLifespan] = useState(DEFAULT_QR_LIFESPAN_MS);
+  const settingsDocRef = useMemoFirebase(() => firestore ? doc(firestore, 'settings', 'main') : null, [firestore]);
+  const { data: settings, isLoading: settingsLoading } = useDoc<SystemSettings>(settingsDocRef);
   
-  useEffect(() => {
-    // Load company location from localStorage
-    const savedSettings = localStorage.getItem('app-settings');
-    if (savedSettings) {
-      const settings = JSON.parse(savedSettings);
-      if (settings.companyLatitude && settings.companyLongitude) {
-        setCompanyLocation({
-          latitude: settings.companyLatitude,
-          longitude: settings.companyLongitude,
-        });
-      }
-      if (settings.allowedRadiusMeters) {
-        setAllowedRadius(settings.allowedRadiusMeters);
-      }
-      if (settings.qrCodeLifespan) {
-          setQrLifespan(settings.qrCodeLifespan * 1000);
-      }
-    }
-  }, []);
-
   const stopCamera = () => {
     if (animationFrameId.current) {
       cancelAnimationFrame(animationFrameId.current);
@@ -81,23 +63,13 @@ export function CameraScanner() {
     }
   };
   
-  // This effect will run when the component unmounts.
   useEffect(() => {
     return () => {
       stopCamera();
     };
   }, []);
 
-  // This effect handles router events to stop the camera when navigating away.
-  // This is a bit of a workaround for Next.js App Router behavior.
-  useEffect(() => {
-    // We can't directly use router events here in the same way as pages router.
-    // The unmount effect (`return () => stopCamera()`) is the primary mechanism.
-  }, [router]);
-
-
   const startCamera = async () => {
-    // Ensure camera is stopped before starting a new stream
     if (streamRef.current) {
       stopCamera();
     }
@@ -117,7 +89,6 @@ export function CameraScanner() {
           setCameraStatus('active');
           scanQRCode();
         };
-        // Add a handler for when the video stream ends unexpectedly
         videoRef.current.onended = () => {
             setCameraStatus('inactive');
         };
@@ -133,7 +104,7 @@ export function CameraScanner() {
     }
   };
   
-  const getDistance = (coords1: GeolocationCoordinates, coords2: GeoLocation) => {
+  const getDistance = (coords1: GeolocationCoords, coords2: GeolocationCoords) => {
     const toRad = (x: number) => (x * Math.PI) / 180;
     const R = 6371e3; // Earth radius in metres
     const dLat = toRad(coords2.latitude - coords1.latitude);
@@ -145,8 +116,9 @@ export function CameraScanner() {
     return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
   };
   
-  const validateCheckIn = (qrData: string, userCoords: GeolocationCoordinates): { valid: boolean; reason: string } => {
+  const validateCheckIn = (qrData: string, userCoords?: GeolocationCoords): { valid: boolean; reason: string } => {
       // 1. Validate QR Code Timestamp
+      const qrLifespanMs = (settings?.qrCodeLifespan ?? 15) * 1000;
       try {
         const decoded = atob(qrData);
         if (!decoded.startsWith('TIMESTAMP:')) {
@@ -154,17 +126,30 @@ export function CameraScanner() {
         }
         const timestamp = parseInt(decoded.split(':')[1], 10);
         const now = Date.now();
-        if (now - timestamp > qrLifespan) {
+        if (now - timestamp > qrLifespanMs) {
             return { valid: false, reason: 'انتهت صلاحية رمز QR. حاول مرة أخرى.' };
         }
       } catch (e) {
           return { valid: false, reason: 'رمز QR تالف أو غير معروف.' };
       }
 
-      // 2. Validate Geolocation
-      const distance = getDistance(userCoords, companyLocation);
-      if (distance > allowedRadius) {
-        return { valid: false, reason: `يجب أن تكون ضمن نطاق ${allowedRadius} مترًا من الشركة لتسجيل الحضور. أنت على بعد ${Math.round(distance)} متر.` };
+      // 2. Validate Geolocation if enabled
+      if (settings?.enableGeolocation) {
+        if (!userCoords) {
+             return { valid: false, reason: 'لم يتم توفير معلومات الموقع الجغرافي.' };
+        }
+        if (settings.companyLatitude === undefined || settings.companyLongitude === undefined) {
+             return { valid: false, reason: 'لم يتم تعيين موقع الشركة في الإعدادات.' };
+        }
+        const companyLocation: GeolocationCoords = {
+            latitude: settings.companyLatitude,
+            longitude: settings.companyLongitude,
+            accuracy: 0,
+        }
+        const distance = getDistance(userCoords, companyLocation);
+        if (distance > settings.allowedRadiusMeters) {
+            return { valid: false, reason: `يجب أن تكون ضمن نطاق ${settings.allowedRadiusMeters} مترًا من الشركة لتسجيل الحضور. أنت على بعد ${Math.round(distance)} متر.` };
+        }
       }
 
       return { valid: true, reason: 'صالح' };
@@ -172,52 +157,91 @@ export function CameraScanner() {
 
   const handleAction = (qrCodeData: string) => {
     stopCamera();
-    setCameraStatus('geolocating');
 
-    // Get current user (mocked)
-    const userJson = localStorage.getItem('currentUser');
-    if (!userJson) {
+    if (settings?.enableGeolocation) {
+        setCameraStatus('geolocating');
+        if (!navigator.geolocation) {
+            setDialog({ open: true, title: 'خطأ في تحديد الموقع', description: 'خدمة تحديد المواقع غير مدعومة في هذا المتصفح.', variant: 'error' });
+            return;
+        }
+        navigator.geolocation.getCurrentPosition(
+            (position) => {
+                processScan(qrCodeData, position.coords);
+            },
+            (error) => {
+                let description = 'فشل تحديد الموقع. يرجى التأكد من تفعيل خدمة المواقع.';
+                if (error.code === error.PERMISSION_DENIED) {
+                    description = 'تم رفض إذن الوصول إلى الموقع. يرجى تفعيله من إعدادات المتصفح.';
+                }
+                setDialog({ open: true, title: 'خطأ في تحديد الموقع', description, variant: 'error' });
+            },
+            { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+        );
+    } else {
+        // Geolocation is disabled, proceed without it
+        processScan(qrCodeData);
+    }
+  };
+
+  const processScan = async (qrCodeData: string, userCoords?: GeolocationCoords) => {
+    setCameraStatus('validating');
+
+    if (!user || !firestore) {
         setDialog({ open: true, title: 'خطأ', description: 'لم يتم العثور على بيانات المستخدم. الرجاء تسجيل الدخول.', variant: 'error' });
         return;
     }
-    const currentUser: Employee = JSON.parse(userJson);
+    
+    // Fetch employee data
+    const employeeDocRef = doc(firestore, 'employees', user.uid);
+    const employeeSnap = await getDoc(employeeDocRef);
+    if (!employeeSnap.exists()) {
+        setDialog({ open: true, title: 'خطأ', description: 'ملف الموظف غير موجود.', variant: 'error' });
+        return;
+    }
+    const currentUser = employeeSnap.data() as Employee;
 
-    if (!navigator.geolocation) {
-         setDialog({ open: true, title: 'خطأ في تحديد الموقع', description: 'خدمة تحديد المواقع غير مدعومة في هذا المتصفح.', variant: 'error' });
-         return;
+
+    const validation = validateCheckIn(qrCodeData, userCoords);
+    if (!validation.valid) {
+        setDialog({ open: true, title: 'فشل التسجيل', description: validation.reason, variant: 'error' });
+        return;
     }
 
-    navigator.geolocation.getCurrentPosition(
-      (position) => {
-        setCameraStatus('validating');
-        const validation = validateCheckIn(qrCodeData, position.coords);
-        
-        if (!validation.valid) {
-            setDialog({ open: true, title: 'فشل التسجيل', description: validation.reason, variant: 'error' });
-            return;
-        }
+    const now = Timestamp.now();
+    const todayStr = format(now.toDate(), 'yyyy-MM-dd');
+    
+    const attendanceCol = collection(firestore, 'attendance');
+    const q = query(attendanceCol, where('employeeId', '==', user.uid), where('date', '==', todayStr), limit(1));
+    const querySnapshot = await getDocs(q);
 
-        const now = Date.now();
-        const today = new Date().toISOString().split('T')[0];
-        const lastScanKey = `lastScan_${currentUser.id}_${today}`;
-        const lastScanTimestamp = localStorage.getItem(lastScanKey);
-        
-        const timeString = new Date().toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit' });
+    const timeString = new Date().toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit' });
 
-        if (!lastScanTimestamp) {
-            // First scan of the day -> Check-in
-            localStorage.setItem(lastScanKey, now.toString());
-            setDialog({
-                open: true,
-                title: 'تم تسجيل الحضور بنجاح',
-                description: `الوقت المسجل: ${timeString}`,
-                variant: 'success'
-            });
-        } else {
-            const lastScanTime = parseInt(lastScanTimestamp, 10);
-            if (now - lastScanTime < CHECK_IN_LOCKOUT_MS) {
-                // Scanned again within 1 hour
-                setDialog({
+    if (querySnapshot.empty) {
+        // First scan of the day -> Check-in
+        const newRecord: AttendanceRecord = {
+            employeeId: user.uid,
+            employeeName: currentUser.name,
+            date: todayStr,
+            checkIn: now,
+            checkOut: null,
+            status: 'حاضر', // Assuming 'present' until logic for 'absent'/'on_leave' is added
+            checkInLocation: userCoords ? { latitude: userCoords.latitude, longitude: userCoords.longitude } : undefined,
+        };
+        addDocumentNonBlocking(attendanceCol, newRecord);
+        setDialog({
+            open: true,
+            title: 'تم تسجيل الحضور بنجاح',
+            description: `الوقت المسجل: ${timeString}`,
+            variant: 'success'
+        });
+    } else {
+        const existingRecordDoc = querySnapshot.docs[0];
+        const existingRecord = existingRecordDoc.data() as AttendanceRecord;
+
+        if (existingRecord.checkIn && !existingRecord.checkOut) {
+            const timeSinceCheckIn = now.toMillis() - existingRecord.checkIn.toMillis();
+            if (timeSinceCheckIn < CHECK_IN_LOCKOUT_MS) {
+                 setDialog({
                     open: true,
                     title: 'تم التسجيل مسبقًا',
                     description: 'لقد قمت بتسجيل الحضور بالفعل منذ فترة قصيرة.',
@@ -225,7 +249,11 @@ export function CameraScanner() {
                 });
             } else {
                 // Scanned after 1 hour -> Check-out
-                // Here you might want to save it differently
+                const updatedRecord: Partial<AttendanceRecord> = {
+                    checkOut: now,
+                    checkOutLocation: userCoords ? { latitude: userCoords.latitude, longitude: userCoords.longitude } : undefined,
+                };
+                setDocumentNonBlocking(existingRecordDoc.ref, updatedRecord, { merge: true });
                 setDialog({
                     open: true,
                     title: 'تم تسجيل الانصراف بنجاح',
@@ -233,18 +261,18 @@ export function CameraScanner() {
                     variant: 'success'
                 });
             }
+        } else {
+             // Already checked in and out
+             setDialog({
+                open: true,
+                title: 'اكتمل اليوم',
+                description: 'لقد قمت بتسجيل الحضور والانصراف لهذا اليوم.',
+                variant: 'info'
+            });
         }
-      },
-      (error) => {
-        let description = 'فشل تحديد الموقع. يرجى التأكد من تفعيل خدمة المواقع.';
-        if (error.code === error.PERMISSION_DENIED) {
-            description = 'تم رفض إذن الوصول إلى الموقع. يرجى تفعيله من إعدادات المتصفح.';
-        }
-        setDialog({ open: true, title: 'خطأ في تحديد الموقع', description, variant: 'error' });
-      },
-      { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
-    );
-  };
+    }
+  }
+
 
   const scanQRCode = () => {
     if (videoRef.current && videoRef.current.readyState === videoRef.current.HAVE_ENOUGH_DATA && canvasRef.current) {
@@ -276,7 +304,6 @@ export function CameraScanner() {
 
   const onDialogClose = () => {
     setDialog({ ...dialog, open: false });
-    // Restart camera after closing dialog to allow another scan
     startCamera();
   }
 

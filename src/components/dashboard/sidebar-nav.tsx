@@ -3,11 +3,11 @@
 import { useEffect, useState, useMemo } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
-import { Camera, LogOut, Settings, Landmark } from 'lucide-react';
+import { Camera, LogOut, Landmark } from 'lucide-react';
 import { screens as allScreens } from '@/lib/screens';
-import type { Employee, Screen } from '@/lib/types';
-import { useUser, useFirestore, useDoc, useMemoFirebase } from '@/firebase';
-import { doc, getDoc } from 'firebase/firestore';
+import type { Employee } from '@/lib/types';
+import { useUser, useFirestore, useDoc, useMemoFirebase, useAuth } from '@/firebase';
+import { doc } from 'firebase/firestore';
 import { signOut } from 'firebase/auth';
 
 import {
@@ -71,11 +71,10 @@ function SidebarSkeleton() {
 export function SidebarNav() {
   const pathname = usePathname();
   const router = useRouter();
-  const { state } = useSidebar();
-  const { user, isUserLoading, auth } = useUser();
+  const { state, setOpenMobile } = useSidebar();
+  const { user, isUserLoading } = useUser();
+  const auth = useAuth();
   const firestore = useFirestore();
-  
-  const [isClient, setIsClient] = useState(false);
   
   const employeeDocRef = useMemoFirebase(
     () => (user ? doc(firestore, 'employees', user.uid) : null),
@@ -84,32 +83,38 @@ export function SidebarNav() {
   const { data: employeeData, isLoading: isEmployeeLoading } = useDoc<Employee>(employeeDocRef);
 
   useEffect(() => {
-    setIsClient(true);
     if (!isUserLoading && !user) {
       router.push('/login');
     }
   }, [isUserLoading, user, router]);
 
   const visibleScreens = useMemo(() => {
-    // Special admin case
+    // Special admin case (hardcoded for now)
     if (user?.email === 'admin@highclass.com') {
-      return allScreens;
+      return allScreens.filter(s => s.id !== 'my-attendance'); // Admin doesn't need "My Attendance"
     }
-    if (!employeeData) return [];
-    return allScreens.filter(screen => employeeData.allowedScreens?.includes(screen.id));
+    if (!employeeData) return [allScreens.find(s => s.id === 'my-attendance')].filter(Boolean); // Default for employee
+    
+    const allowed = employeeData.allowedScreens || [];
+    // Ensure "My Attendance" is always available for logged-in employees
+    if (!allowed.includes('my-attendance')) {
+        allowed.push('my-attendance');
+    }
+
+    return allScreens.filter(screen => allowed.includes(screen.id));
   }, [employeeData, user]);
 
   const handleLogout = async () => {
     if (auth) {
       await signOut(auth);
-      // The onAuthStateChanged listener will trigger the redirect
+      router.push('/login');
     }
   };
 
   const currentUserDisplay = useMemo(() => {
     if (user?.email === 'admin@highclass.com') {
         return {
-            name: 'Admin',
+            name: 'المدير العام',
             role: 'Administrator',
             avatarUrl: undefined,
             avatarHint: 'admin user',
@@ -119,13 +124,19 @@ export function SidebarNav() {
   }, [user, employeeData]);
 
 
-  if (!isClient || isUserLoading || (user && !currentUserDisplay)) {
+  if (isUserLoading || (user && !currentUserDisplay && !isEmployeeLoading)) {
     return <SidebarSkeleton />;
   }
   
   if (!user) {
     return null; // Don't render sidebar if not logged in
   }
+
+  const NavLink = ({ href, children }: { href: string, children: React.ReactNode }) => (
+    <Link href={href} onClick={() => setOpenMobile(false)}>
+      {children}
+    </Link>
+  );
 
   return (
     <Sidebar side="right">
@@ -149,10 +160,10 @@ export function SidebarNav() {
                 isActive={pathname === item.href}
                 tooltip={item.label}
               >
-                <Link href={item.href}>
+                <NavLink href={item.href}>
                   <item.icon />
                   <span>{item.label}</span>
-                </Link>
+                </NavLink>
               </SidebarMenuButton>
             </SidebarMenuItem>
           ))}
@@ -160,10 +171,10 @@ export function SidebarNav() {
         <SidebarMenu className='mt-4'>
           <SidebarMenuItem>
             <SidebarMenuButton asChild tooltip="تسجيل الحضور/الانصراف">
-              <Link href="/check-in">
+              <NavLink href="/check-in">
                 <Camera />
                 <span>تسجيل الحضور/الانصراف</span>
-              </Link>
+              </NavLink>
             </SidebarMenuButton>
           </SidebarMenuItem>
         </SidebarMenu>
@@ -192,11 +203,6 @@ export function SidebarNav() {
           </DropdownMenuTrigger>
           <DropdownMenuContent side="top" align="start" className="w-56" sideOffset={10}>
             <DropdownMenuLabel>حسابي</DropdownMenuLabel>
-            <DropdownMenuSeparator />
-            <DropdownMenuItem onClick={() => router.push('/dashboard/settings')}>
-              <Settings className="ml-2 h-4 w-4" />
-              <span>الإعدادات</span>
-            </DropdownMenuItem>
             <DropdownMenuSeparator />
             <DropdownMenuItem onClick={handleLogout}>
               <LogOut className="ml-2 h-4 w-4" />

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useMemo } from 'react';
 import {
   Table,
   TableBody,
@@ -11,28 +11,26 @@ import {
 } from '@/components/ui/table';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { attendanceRecords } from '@/lib/mock-data';
 import { cn } from '@/lib/utils';
 import { format, startOfMonth, endOfMonth } from 'date-fns';
 import { ar } from 'date-fns/locale';
 import type { Employee, AttendanceRecord } from '@/lib/types';
-import { Clock, UserCheck, UserX, CalendarOff } from 'lucide-react';
+import { Clock, UserCheck, UserX, CalendarOff, Loader2 } from 'lucide-react';
+import { useUser, useFirestore, useCollection, useMemoFirebase } from '@/firebase';
+import { collection, query, where } from 'firebase/firestore';
 
 
 export default function MyAttendancePage() {
-  const [currentUser, setCurrentUser] = useState<Employee | null>(null);
-  const [userRecords, setUserRecords] = useState<AttendanceRecord[]>([]);
+  const { user, isUserLoading } = useUser();
+  const firestore = useFirestore();
 
-  useEffect(() => {
-    const userJson = localStorage.getItem('currentUser');
-    if (userJson) {
-      const user: Employee = JSON.parse(userJson);
-      setCurrentUser(user);
-      const records = attendanceRecords.filter(record => record.employee.id === user.id);
-      setUserRecords(records);
-    }
-  }, []);
-
+  const userRecordsQuery = useMemoFirebase(
+    () => user ? query(collection(firestore, 'attendance'), where('employeeId', '==', user.uid)) : null,
+    [user, firestore]
+  );
+  
+  const { data: userRecords, isLoading: recordsLoading } = useCollection<AttendanceRecord>(userRecordsQuery);
+  
   const getStatusVariant = (status: 'حاضر' | 'غائب' | 'في إجازة') => {
     switch (status) {
       case 'حاضر':
@@ -45,13 +43,14 @@ export default function MyAttendancePage() {
   };
   
   const monthlyStats = useMemo(() => {
+    if (!userRecords) return { presentDays: 0, absentDays: 0, onLeaveDays: 0, totalDelayMinutes: 0 };
+    
     const now = new Date();
-    const monthStart = startOfMonth(now);
-    const monthEnd = endOfMonth(now);
+    const monthStart = format(startOfMonth(now), 'yyyy-MM-dd');
+    const monthEnd = format(endOfMonth(now), 'yyyy-MM-dd');
 
     const recordsThisMonth = userRecords.filter(record => {
-      const recordDate = new Date(record.date);
-      return recordDate >= monthStart && recordDate <= monthEnd;
+      return record.date >= monthStart && record.date <= monthEnd;
     });
 
     const presentDays = recordsThisMonth.filter(r => r.status === 'حاضر').length;
@@ -70,10 +69,11 @@ export default function MyAttendancePage() {
   ];
 
 
-  if (!currentUser) {
+  if (isUserLoading || recordsLoading) {
     return (
-       <div className="flex-1 space-y-4 p-4 md:p-8 pt-6">
-           <h2 className="text-3xl font-bold tracking-tight font-headline">جاري تحميل بياناتك...</h2>
+       <div className="flex-1 space-y-4 p-4 md:p-8 pt-6 flex flex-col items-center justify-center">
+           <Loader2 className="h-12 w-12 animate-spin text-primary"/>
+           <h2 className="text-xl font-semibold tracking-tight mt-4">جاري تحميل بياناتك...</h2>
        </div>
     );
   }
@@ -120,14 +120,14 @@ export default function MyAttendancePage() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {userRecords.length > 0 ? (
+              {userRecords && userRecords.length > 0 ? (
                 userRecords.map((record) => (
                   <TableRow key={record.id}>
                     <TableCell>
                         {format(new Date(record.date), 'PPP', { locale: ar })}
                     </TableCell>
-                    <TableCell>{record.checkIn || '---'}</TableCell>
-                    <TableCell>{record.checkOut || '---'}</TableCell>
+                    <TableCell>{record.checkIn ? format(record.checkIn.toDate(), 'p', { locale: ar }) : '---'}</TableCell>
+                    <TableCell>{record.checkOut ? format(record.checkOut.toDate(), 'p', { locale: ar }) : '---'}</TableCell>
                     <TableCell className={cn(record.delayMinutes && record.delayMinutes > 0 ? "text-orange-600 font-medium" : "")}>
                         {record.delayMinutes || '0'}
                     </TableCell>

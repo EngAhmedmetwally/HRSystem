@@ -1,4 +1,3 @@
-
 'use client';
 
 import { useState, useMemo, useEffect } from 'react';
@@ -13,7 +12,6 @@ import {
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { attendanceRecords, employees } from '@/lib/mock-data';
 import { cn } from '@/lib/utils';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Button } from '@/components/ui/button';
@@ -23,13 +21,61 @@ import { format } from 'date-fns';
 import { ar } from 'date-fns/locale';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useSearchParams } from 'next/navigation';
+import { useFirestore, useCollection, useMemoFirebase } from '@/firebase';
+import { collection, query, where, Timestamp } from 'firebase/firestore';
+import type { AttendanceRecord, Employee } from '@/lib/types';
+import { Skeleton } from '@/components/ui/skeleton';
+
+function AttendanceTableSkeleton() {
+    return (
+        <div className="space-y-4">
+            {Array.from({ length: 5 }).map((_, i) => (
+                <div key={i} className="flex items-center space-x-4 p-2">
+                    <Skeleton className="h-12 w-12 rounded-full" />
+                    <div className="space-y-2 flex-1">
+                        <Skeleton className="h-4 w-3/4" />
+                        <Skeleton className="h-4 w-1/2" />
+                    </div>
+                     <Skeleton className="h-4 w-24" />
+                     <Skeleton className="h-4 w-24" />
+                </div>
+            ))}
+        </div>
+    )
+}
 
 export default function AttendancePage() {
   const searchParams = useSearchParams();
+  const firestore = useFirestore();
+
   const [startDate, setStartDate] = useState<Date | undefined>(undefined);
   const [endDate, setEndDate] = useState<Date | undefined>(undefined);
   const [selectedEmployee, setSelectedEmployee] = useState<string>('all');
   
+  const { data: employees, isLoading: employeesLoading } = useCollection<Employee>(
+      useMemoFirebase(() => firestore ? collection(firestore, 'employees') : null, [firestore])
+  );
+
+  const attendanceQuery = useMemoFirebase(() => {
+    if (!firestore) return null;
+    let q = query(collection(firestore, 'attendance'));
+
+    if (startDate) {
+        q = query(q, where('date', '>=', format(startDate, 'yyyy-MM-dd')));
+    }
+    if (endDate) {
+        q = query(q, where('date', '<=', format(endDate, 'yyyy-MM-dd')));
+    }
+    if (selectedEmployee !== 'all') {
+        q = query(q, where('employeeId', '==', selectedEmployee));
+    }
+    
+    return q;
+  }, [firestore, startDate, endDate, selectedEmployee]);
+
+  const { data: attendanceRecords, isLoading: attendanceLoading } = useCollection<AttendanceRecord>(attendanceQuery);
+
+
   useEffect(() => {
     const employeeId = searchParams.get('employeeId');
     const urlStartDate = searchParams.get('startDate');
@@ -56,25 +102,6 @@ export default function AttendancePage() {
         return 'secondary';
     }
   };
-
-  const filteredRecords = useMemo(() => {
-    return attendanceRecords.filter((record) => {
-      const recordDate = new Date(record.date);
-      recordDate.setHours(0, 0, 0, 0);
-
-      const start = startDate ? new Date(startDate) : null;
-      if (start) start.setHours(0, 0, 0, 0);
-
-      const end = endDate ? new Date(endDate) : null;
-      if (end) end.setHours(0, 0, 0, 0);
-      
-      const isAfterStartDate = !start || recordDate >= start;
-      const isBeforeEndDate = !end || recordDate <= end;
-      const isEmployeeMatch = selectedEmployee === 'all' || record.employee.id === selectedEmployee;
-      
-      return isAfterStartDate && isBeforeEndDate && isEmployeeMatch;
-    });
-  }, [startDate, endDate, selectedEmployee]);
   
   const clearFilters = () => {
     setStartDate(undefined);
@@ -83,6 +110,7 @@ export default function AttendancePage() {
   };
 
   const hasActiveFilters = startDate !== undefined || endDate !== undefined || selectedEmployee !== 'all';
+  const isLoading = employeesLoading || attendanceLoading;
 
   return (
     <div className="flex-1 space-y-4 p-4 md:p-8 pt-6">
@@ -151,7 +179,7 @@ export default function AttendancePage() {
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">كل الموظفين</SelectItem>
-                  {employees.map(emp => (
+                  {employees?.map(emp => (
                     <SelectItem key={emp.id} value={emp.id}>{emp.name}</SelectItem>
                   ))}
                 </SelectContent>
@@ -166,6 +194,9 @@ export default function AttendancePage() {
            </div>
         </CardHeader>
         <CardContent>
+            {isLoading ? (
+                <AttendanceTableSkeleton />
+            ) : (
           <Table>
             <TableHeader>
               <TableRow>
@@ -177,25 +208,27 @@ export default function AttendancePage() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {filteredRecords.length > 0 ? (
-                filteredRecords.map((record) => (
+              {attendanceRecords && attendanceRecords.length > 0 ? (
+                attendanceRecords.map((record) => {
+                  const employee = employees?.find(e => e.id === record.employeeId);
+                  return (
                   <TableRow key={record.id}>
                     <TableCell>
                       <div className="flex items-center gap-3">
                         <Avatar>
                           <AvatarImage
-                            src={record.employee.avatarUrl}
-                            alt={record.employee.name}
-                            data-ai-hint={record.employee.avatarHint}
+                            src={employee?.avatarUrl}
+                            alt={employee?.name}
+                            data-ai-hint={employee?.avatarHint}
                           />
                           <AvatarFallback>
-                            {record.employee.name.charAt(0)}
+                            {record.employeeName.charAt(0)}
                           </AvatarFallback>
                         </Avatar>
                         <div>
-                          <p className="font-medium">{record.employee.name}</p>
+                          <p className="font-medium">{record.employeeName}</p>
                           <p className="text-sm text-muted-foreground">
-                            {record.employee.role}
+                            {employee?.role}
                           </p>
                         </div>
                       </div>
@@ -203,15 +236,16 @@ export default function AttendancePage() {
                     <TableCell>
                         {format(new Date(record.date), 'PPP', { locale: ar })}
                     </TableCell>
-                    <TableCell>{record.checkIn || '---'}</TableCell>
-                    <TableCell>{record.checkOut || '---'}</TableCell>
+                    <TableCell>{record.checkIn ? format(record.checkIn.toDate(), 'p', {locale: ar}) : '---'}</TableCell>
+                    <TableCell>{record.checkOut ? format(record.checkOut.toDate(), 'p', {locale: ar}) : '---'}</TableCell>
                     <TableCell>
                       <Badge variant={getStatusVariant(record.status)}>
                         {record.status}
                       </Badge>
                     </TableCell>
                   </TableRow>
-                ))
+                  );
+                })
                ) : (
                 <TableRow>
                     <TableCell colSpan={5} className="h-24 text-center">
@@ -221,6 +255,7 @@ export default function AttendancePage() {
                )}
             </TableBody>
           </Table>
+          )}
         </CardContent>
       </Card>
     </div>

@@ -22,7 +22,6 @@ export interface WorkSchedule {
 export type Employee = {
   id: string; // Corresponds to Firebase Auth UID
   name: string;
-  username: string; // Used for display, login will be via email
   email: string;
   role: string;
   department?: string;
@@ -42,8 +41,8 @@ export type AttendanceRecord = {
   checkOut: Timestamp | null;
   status: 'حاضر' | 'غائب' | 'في إجازة';
   delayMinutes?: number;
-  checkInLocation?: GeoLocation;
-  checkOutLocation?: GeoLocation;
+  checkInLocation?: { latitude: number, longitude: number };
+  checkOutLocation?: { latitude: number, longitude: number };
 };
 
 
@@ -56,7 +55,6 @@ export type DeductionRule = {
   delayMinutes: number;
   deductionType: 'minutes' | 'hours' | 'amount';
   deductionValue: number;
-  period: 'daily' | 'monthly';
 };
 
 export type SystemSettings = {
@@ -67,8 +65,8 @@ export type SystemSettings = {
   gracePeriodType: 'daily' | 'monthly';
   deductionRules: DeductionRule[];
   enableGeolocation: boolean;
-  companyLatitude: number;
-  companyLongitude: number;
+  companyLatitude?: number;
+  companyLongitude?: number;
   allowedRadiusMeters: number;
   qrCodeLifespan: number;
 };

@@ -25,22 +25,26 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { employees } from '@/lib/mock-data';
-import type { Employee } from '@/lib/types';
-import { Download, Calculator, Banknote } from 'lucide-react';
+import type { Employee, PayrollRecord, PayrollHistory } from '@/lib/types';
+import { Download, Calculator, Banknote, Loader2 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { useRouter } from 'next/navigation';
 import { startOfMonth, endOfMonth, format } from 'date-fns';
+import { useFirestore, useCollection, useMemoFirebase, addDocumentNonBlocking } from '@/firebase';
+import { collection, Timestamp } from 'firebase/firestore';
 
 
-const getPayrollData = (employees: Employee[]) => {
+const getPayrollData = (employees: Employee[]): PayrollRecord[] => {
   return employees.map(emp => {
-    const deductions = Math.floor(Math.random() * 500); // Random deductions
-    const overtime = Math.floor(Math.random() * 1000); // Random overtime
+    // In a real app, this would involve complex calculations based on attendance.
+    // For now, we use random data.
+    const deductions = Math.floor(Math.random() * 500); 
+    const overtime = Math.floor(Math.random() * 1000); 
     const grossPay = emp.salary.base + emp.salary.allowances;
     const netPay = grossPay - deductions + overtime;
     return {
-      ...emp,
+      employeeId: emp.id,
+      name: emp.name,
       deductions,
       overtime,
       grossPay,
@@ -51,33 +55,54 @@ const getPayrollData = (employees: Employee[]) => {
 
 export default function PayrollPage() {
   const [selectedMonth, setSelectedMonth] = useState<string>('');
-  const [payrollData, setPayrollData] = useState<any[]>([]);
+  const [selectedYear, setSelectedYear] = useState<number>(new Date().getFullYear());
+  const [payrollData, setPayrollData] = useState<PayrollRecord[]>([]);
   const { toast } = useToast();
   const router = useRouter();
+  const firestore = useFirestore();
+
+  const employeesCollectionRef = useMemoFirebase(() => firestore ? collection(firestore, 'employees') : null, [firestore]);
+  const { data: employees, isLoading: employeesLoading } = useCollection<Employee>(employeesCollectionRef);
 
   const handleGeneratePayroll = () => {
-    if (selectedMonth) {
+    if (selectedMonth && employees) {
       setPayrollData(getPayrollData(employees));
     }
   };
 
   const handleDisburseSalaries = () => {
-     if (payrollData.length > 0) {
-        // In a real app, you would save this to a database and trigger payments.
-        // For this demo, we'll just show a success message.
-        localStorage.setItem(`payroll_${selectedMonth}_${new Date().getFullYear()}`, JSON.stringify(payrollData));
+     if (payrollData.length > 0 && firestore) {
+        const payrollHistoryRef = collection(firestore, 'payrollHistory');
+        const totalNetPay = payrollData.reduce((acc, record) => acc + record.netPay, 0);
+
+        const newPayrollHistory: Omit<PayrollHistory, 'id'> = {
+            month: selectedMonth,
+            year: selectedYear,
+            generatedAt: Timestamp.now(),
+            totalNetPay: totalNetPay,
+            records: payrollData
+        };
+
+        addDocumentNonBlocking(payrollHistoryRef, newPayrollHistory);
+        
         toast({
             title: 'تم صرف الرواتب بنجاح',
             description: `تم حفظ وتأكيد صرف رواتب شهر ${selectedMonth}.`,
         });
+        
+        // Optionally clear current payroll
+        setPayrollData([]);
+        setSelectedMonth('');
      }
   };
   
   const handleRowClick = (employeeId: string) => {
-    if (!selectedMonth || !currentYear) return;
+    if (!selectedMonth || !selectedYear) return;
 
     const monthIndex = months.findIndex(m => m.value === selectedMonth);
-    const date = new Date(currentYear, monthIndex, 1);
+    if(monthIndex === -1) return;
+
+    const date = new Date(selectedYear, monthIndex, 1);
     
     const startDate = startOfMonth(date);
     const endDate = endOfMonth(date);
@@ -96,9 +121,10 @@ export default function PayrollPage() {
   }, [payrollData]);
   
   const currentYear = new Date().getFullYear();
+  const years = Array.from({ length: 5 }, (_, i) => currentYear - i);
   const months = Array.from({ length: 12 }, (_, i) => {
     const monthName = new Date(currentYear, i).toLocaleString('ar-EG', { month: 'long' });
-    return { value: monthName, label: `${monthName} ${currentYear}` };
+    return { value: monthName, label: monthName };
   });
 
   return (
@@ -117,6 +143,16 @@ export default function PayrollPage() {
               <CardDescription>اختر الشهر لإنشاء كشف المرتبات للموظفين.</CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
+               <Select onValueChange={(value) => setSelectedYear(parseInt(value))} value={selectedYear.toString()} dir="rtl">
+                <SelectTrigger>
+                  <SelectValue placeholder="اختر السنة" />
+                </SelectTrigger>
+                <SelectContent>
+                  {years.map(year => (
+                    <SelectItem key={year} value={year.toString()}>{year}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
               <Select onValueChange={setSelectedMonth} value={selectedMonth} dir="rtl">
                 <SelectTrigger>
                   <SelectValue placeholder="اختر الشهر" />
@@ -129,8 +165,8 @@ export default function PayrollPage() {
               </Select>
             </CardContent>
             <CardFooter>
-              <Button onClick={handleGeneratePayroll} disabled={!selectedMonth} className="w-full">
-                <Calculator className="ml-2 h-4 w-4" />
+              <Button onClick={handleGeneratePayroll} disabled={!selectedMonth || employeesLoading} className="w-full">
+                {employeesLoading ? <Loader2 className="ml-2 h-4 w-4 animate-spin"/> : <Calculator className="ml-2 h-4 w-4" />}
                 إنشاء الكشف
               </Button>
             </CardFooter>
@@ -189,7 +225,7 @@ export default function PayrollPage() {
                   </TableHeader>
                   <TableBody>
                     {payrollData.map((record) => (
-                      <TableRow key={record.id} onClick={() => handleRowClick(record.id)} className="cursor-pointer">
+                      <TableRow key={record.employeeId} onClick={() => handleRowClick(record.employeeId)} className="cursor-pointer">
                         <TableCell>{record.name}</TableCell>
                         <TableCell>{record.grossPay.toLocaleString()} ج.م</TableCell>
                         <TableCell className="text-green-600">{record.overtime.toLocaleString()} ج.م</TableCell>

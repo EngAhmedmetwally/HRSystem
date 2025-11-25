@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import {
@@ -13,62 +13,42 @@ import {
 } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Landmark } from 'lucide-react';
+import { Landmark, Loader2 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
-import { useAuth, initiateEmailSignIn } from '@/firebase'; // Use non-blocking sign-in
+import { useAuth, useUser } from '@/firebase';
 import { signInWithEmailAndPassword } from 'firebase/auth';
 
 export default function LoginPage() {
   const router = useRouter();
   const { toast } = useToast();
-  const auth = useAuth(); // Get auth instance from provider
+  const auth = useAuth();
+  const { user, isUserLoading } = useUser();
   
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [isLoading, setIsLoading] = useState(false);
 
+  useEffect(() => {
+    // If user is already logged in, redirect to dashboard
+    if (!isUserLoading && user) {
+      router.push('/dashboard');
+    }
+  }, [user, isUserLoading, router]);
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!auth) {
+        toast({ variant: "destructive", title: "خطأ", description: "خدمة المصادقة غير متاحة." });
+        return;
+    }
     setIsLoading(true);
 
-    // Special case for hardcoded admin user - should be migrated to Firestore roles
-    if (email === 'admin@highclass.com' && password === 'admin102030') {
-      try {
-        await signInWithEmailAndPassword(auth, email, password);
-        toast({
-          title: 'تم تسجيل الدخول بنجاح',
-          description: 'مرحباً بعودتك أيها المدير!',
-        });
-        // The onAuthStateChanged listener in the provider will handle the redirect
-        router.push('/dashboard');
-      } catch (error: any) {
-        console.error("Admin login failed", error)
-        // Handle case where admin user doesn't exist in Firebase Auth
-        if (error.code === 'auth/user-not-found' || error.code === 'auth/invalid-credential') {
-           toast({
-              variant: 'destructive',
-              title: 'فشل تسجيل الدخول',
-              description: 'بيانات اعتماد المدير غير صحيحة.',
-           });
-        } else {
-             toast({
-              variant: 'destructive',
-              title: 'خطأ غير متوقع',
-              description: error.message,
-           });
-        }
-        setIsLoading(false);
-      }
-      return;
-    }
-
     try {
-        // Use standard Firebase sign-in
         await signInWithEmailAndPassword(auth, email, password);
         toast({
           title: 'تم تسجيل الدخول بنجاح',
         });
-        router.push('/dashboard');
+        // The useUser hook will detect the new user state and the useEffect above will redirect
       } catch (error: any) {
         let description = 'حدث خطأ غير متوقع.';
         if (error.code === 'auth/user-not-found' || error.code === 'auth/wrong-password' || error.code === 'auth/invalid-credential') {
@@ -83,6 +63,15 @@ export default function LoginPage() {
         setIsLoading(false);
       }
   };
+
+  // Show a loading state while checking for existing user
+  if (isUserLoading || user) {
+      return (
+        <div className="flex min-h-screen flex-col items-center justify-center bg-secondary">
+          <Loader2 className="h-12 w-12 animate-spin text-primary" />
+        </div>
+      );
+  }
 
   return (
     <main className="flex min-h-screen flex-col items-center justify-center bg-secondary p-4">
@@ -126,7 +115,7 @@ export default function LoginPage() {
           </CardContent>
           <CardFooter>
             <Button type="submit" className="w-full" disabled={isLoading}>
-              {isLoading ? 'جاري تسجيل الدخول...' : 'تسجيل الدخول'}
+              {isLoading ? <Loader2 className="ml-2 h-4 w-4 animate-spin"/> : 'تسجيل الدخول'}
             </Button>
           </CardFooter>
         </form>

@@ -25,20 +25,23 @@ import {
 import { useForm, SubmitHandler, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import { employees as initialEmployees } from '@/lib/mock-data';
 import type { Employee } from '@/lib/types';
-import { PlusCircle, Pencil } from 'lucide-react';
+import { PlusCircle, Pencil, Loader2 } from 'lucide-react';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Checkbox } from '@/components/ui/checkbox';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { screens } from '@/lib/screens';
+import { useFirestore, useCollection, useMemoFirebase, setDocumentNonBlocking } from '@/firebase';
+import { collection, doc } from 'firebase/firestore';
+import { useToast } from '@/hooks/use-toast';
+import { getAuth, createUserWithEmailAndPassword } from 'firebase/auth';
 
 const weekDays = ['السبت', 'الأحد', 'الاثنين', 'الثلاثاء', 'الأربعاء', 'الخميس', 'الجمعة'] as const;
 
 const employeeSchema = z.object({
   name: z.string().min(1, 'الاسم مطلوب'),
-  username: z.string().min(3, 'اسم المستخدم مطلوب (3 أحرف على الأقل)'),
-  password: z.string().optional(), // Made optional for editing
+  email: z.string().email('بريد إلكتروني غير صالح'),
+  password: z.string().optional(),
   role: z.string().min(1, 'الوظيفة مطلوبة'),
   department: z.string().min(1, 'القسم مطلوب'),
   baseSalary: z.coerce.number().min(0, 'الراتب الأساسي يجب أن يكون رقمًا موجبًا'),
@@ -57,7 +60,6 @@ const employeeSchema = z.object({
     message: 'يجب تحديد وقت البدء والانتهاء للدوام المخصص',
     path: ['startTime'],
 }).refine(data => {
-    // If password is provided, it must be at least 6 characters
     if (data.password && data.password.length > 0) {
         return data.password.length >= 6;
     }
@@ -70,7 +72,11 @@ const employeeSchema = z.object({
 type EmployeeFormData = z.infer<typeof employeeSchema>;
 
 export default function EmployeesPage() {
-  const [employees, setEmployees] = useState<Employee[]>(initialEmployees);
+  const { toast } = useToast();
+  const firestore = useFirestore();
+  const employeesCollectionRef = useMemoFirebase(() => firestore ? collection(firestore, 'employees') : null, [firestore]);
+  const { data: employees, isLoading } = useCollection<Employee>(employeesCollectionRef);
+
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingEmployee, setEditingEmployee] = useState<Employee | null>(null);
 
@@ -80,7 +86,7 @@ export default function EmployeesPage() {
     reset,
     control,
     watch,
-    formState: { errors },
+    formState: { errors, isSubmitting },
   } = useForm<EmployeeFormData>({
     resolver: zodResolver(employeeSchema),
     defaultValues: {
@@ -88,6 +94,7 @@ export default function EmployeesPage() {
         weekends: ['الجمعة', 'السبت'],
         allowedScreens: [],
         password: '',
+        email: '',
     },
   });
 
@@ -97,7 +104,7 @@ export default function EmployeesPage() {
     if (editingEmployee) {
       reset({
         name: editingEmployee.name,
-        username: editingEmployee.username,
+        email: editingEmployee.email,
         password: '', // Don't pre-fill password
         role: editingEmployee.role,
         department: editingEmployee.department,
@@ -113,7 +120,7 @@ export default function EmployeesPage() {
     } else {
         reset({
              name: '',
-             username: '',
+             email: '',
              password: '',
              role: '',
              department: '',
@@ -128,64 +135,78 @@ export default function EmployeesPage() {
     }
   }, [editingEmployee, reset]);
 
-  const onSubmit: SubmitHandler<EmployeeFormData> = (data) => {
-    if (editingEmployee) {
-      // Update existing employee
-      const updatedEmployees = employees.map(emp => 
-        emp.id === editingEmployee.id ? {
-          ...emp,
-          name: data.name,
-          username: data.username,
-          // Only update password if a new one is provided
-          password: data.password ? data.password : emp.password,
-          role: data.role,
-          department: data.department,
-          salary: {
-            base: data.baseSalary,
-            allowances: data.allowances,
-          },
-          workSchedule: {
-            type: data.workScheduleType,
-            startTime: data.startTime,
-            endTime: data.endTime,
-            weekends: data.weekends,
-          },
-          allowedScreens: data.allowedScreens,
-        } : emp
-      );
-      setEmployees(updatedEmployees);
-    } else {
-      // Add new employee
-      if (!data.password) {
-        // Handle case where new employee form doesn't have a password. 
-        // This should be caught by validation, but as a fallback.
-        alert('كلمة المرور مطلوبة للموظف الجديد');
-        return;
-      }
-      const newEmployee: Employee = {
-        id: (employees.length + 1).toString(),
-        name: data.name,
-        username: data.username,
-        password: data.password, // In a real app, this should be hashed
-        role: data.role,
-        department: data.department,
-        salary: {
-          base: data.baseSalary,
-          allowances: data.allowances,
-        },
-        workSchedule: {
-          type: data.workScheduleType,
-          startTime: data.startTime,
-          endTime: data.endTime,
-          weekends: data.weekends,
-        },
-        allowedScreens: data.allowedScreens,
-        avatarUrl: `https://picsum.photos/seed/${employees.length + 1}/100/100`,
-        avatarHint: 'person',
-      };
-      setEmployees([...employees, newEmployee]);
+  const onSubmit: SubmitHandler<EmployeeFormData> = async (data) => {
+    if (!firestore) return;
+    
+    try {
+        if (editingEmployee) {
+            // Update existing employee in Firestore
+            const employeeDocRef = doc(firestore, 'employees', editingEmployee.id);
+            const updatedData: Partial<Employee> = {
+                name: data.name,
+                email: data.email, // Note: Changing email in Auth is a separate, complex process
+                role: data.role,
+                department: data.department,
+                salary: {
+                    base: data.baseSalary,
+                    allowances: data.allowances,
+                },
+                workSchedule: {
+                    type: data.workScheduleType,
+                    startTime: data.startTime,
+                    endTime: data.endTime,
+                    weekends: data.weekends,
+                },
+                allowedScreens: data.allowedScreens,
+            };
+            setDocumentNonBlocking(employeeDocRef, updatedData, { merge: true });
+            toast({ title: "تم تحديث بيانات الموظف بنجاح" });
+
+        } else {
+            // Add new employee
+            if (!data.password) {
+                toast({ variant: 'destructive', title: 'خطأ', description: 'كلمة المرور مطلوبة للموظف الجديد.' });
+                return;
+            }
+            
+            // 1. Create user in Firebase Auth
+            const auth = getAuth();
+            const userCredential = await createUserWithEmailAndPassword(auth, data.email, data.password);
+            const newUserId = userCredential.user.uid;
+
+            // 2. Create employee document in Firestore
+            const newEmployeeDocRef = doc(firestore, 'employees', newUserId);
+            const newEmployee: Omit<Employee, 'id'> = {
+                name: data.name,
+                email: data.email,
+                role: data.role,
+                department: data.department,
+                salary: {
+                    base: data.baseSalary,
+                    allowances: data.allowances,
+                },
+                workSchedule: {
+                    type: data.workScheduleType,
+                    startTime: data.startTime,
+                    endTime: data.endTime,
+                    weekends: data.weekends,
+                },
+                allowedScreens: data.allowedScreens,
+                avatarUrl: `https://picsum.photos/seed/${newUserId}/100/100`,
+                avatarHint: 'person',
+            };
+            setDocumentNonBlocking(newEmployeeDocRef, newEmployee, {});
+            toast({ title: "تم إضافة الموظف بنجاح" });
+        }
+        closeDialog();
+    } catch (error: any) {
+        console.error("Error saving employee:", error);
+        let message = "حدث خطأ أثناء حفظ بيانات الموظف.";
+        if (error.code === 'auth/email-already-in-use') {
+            message = "هذا البريد الإلكتروني مستخدم بالفعل.";
+        }
+        toast({ variant: 'destructive', title: 'خطأ', description: message });
     }
-    closeDialog();
   };
   
   const closeDialog = () => {
@@ -197,7 +218,7 @@ export default function EmployeesPage() {
     setEditingEmployee(null);
     reset({
          name: '',
-         username: '',
+         email: '',
          password: '',
          role: '',
          department: '',
@@ -238,12 +259,12 @@ export default function EmployeesPage() {
                     {errors.name && <p className="text-sm text-destructive mt-1">{errors.name.message}</p>}
                   </div>
                    <div>
-                    <Label htmlFor="username">اسم المستخدم</Label>
-                    <Input id="username" {...register('username')} />
-                    {errors.username && <p className="text-sm text-destructive mt-1">{errors.username.message}</p>}
+                    <Label htmlFor="email">البريد الإلكتروني</Label>
+                    <Input id="email" type="email" {...register('email')} disabled={!!editingEmployee} />
+                    {errors.email && <p className="text-sm text-destructive mt-1">{errors.email.message}</p>}
                   </div>
                    <div>
-                    <Label htmlFor="password">كلمة المرور (اتركها فارغة لعدم التغيير)</Label>
+                    <Label htmlFor="password">{editingEmployee ? 'كلمة مرور جديدة (اتركها فارغة لعدم التغيير)' : 'كلمة المرور'}</Label>
                     <Input id="password" type="password" {...register('password')} placeholder="******" />
                     {errors.password && <p className="text-sm text-destructive mt-1">{errors.password.message}</p>}
                   </div>
@@ -380,7 +401,10 @@ export default function EmployeesPage() {
                     إلغاء
                   </Button>
                 </DialogClose>
-                <Button type="submit">{editingEmployee ? 'حفظ التعديلات' : 'إضافة'}</Button>
+                <Button type="submit" disabled={isSubmitting}>
+                    {isSubmitting && <Loader2 className="ml-2 h-4 w-4 animate-spin" />}
+                    {editingEmployee ? 'حفظ التعديلات' : 'إضافة'}
+                </Button>
               </DialogFooter>
             </form>
              </ScrollArea>
@@ -399,7 +423,7 @@ export default function EmployeesPage() {
               <TableRow>
                 <TableHead>الرقم</TableHead>
                 <TableHead>الاسم</TableHead>
-                <TableHead>اسم المستخدم</TableHead>
+                <TableHead>البريد الإلكتروني</TableHead>
                 <TableHead>الوظيفة</TableHead>
                 <TableHead>الدوام</TableHead>
                 <TableHead>إجمالي الراتب</TableHead>
@@ -407,13 +431,20 @@ export default function EmployeesPage() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {employees.map((employee, index) => {
+              {isLoading && (
+                <TableRow>
+                  <TableCell colSpan={7} className="h-24 text-center">
+                    <Loader2 className="mx-auto h-6 w-6 animate-spin" />
+                  </TableCell>
+                </TableRow>
+              )}
+              {employees && employees.map((employee, index) => {
                 const totalSalary = employee.salary.base + employee.salary.allowances;
                 return (
                   <TableRow key={employee.id}>
                     <TableCell>{index + 1}</TableCell>
                     <TableCell>{employee.name}</TableCell>
-                    <TableCell>{employee.username}</TableCell>
+                    <TableCell>{employee.email}</TableCell>
                     <TableCell>{employee.role}</TableCell>
                     <TableCell>
                       {employee.workSchedule.type === 'default' ? 'عام' : 
