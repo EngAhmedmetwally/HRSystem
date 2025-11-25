@@ -17,8 +17,7 @@ export default function QrCodePage() {
   const [currentDate, setCurrentDate] = useState('');
   const [qrValue, setQrValue] = useState('');
   const [progress, setProgress] = useState(100);
-  const intervalRef = useRef<NodeJS.Timeout>();
-  const progressIntervalRef = useRef<NodeJS.Timeout>();
+  const intervalRef = useRef<NodeJS.Timeout | null>(null);
 
   const generateQRValue = () => {
     const timestamp = Date.now();
@@ -26,7 +25,7 @@ export default function QrCodePage() {
     const signature = btoa(`TIMESTAMP:${timestamp}`);
     return signature;
   };
-
+  
   useEffect(() => {
     const today = new Date();
     const options: Intl.DateTimeFormatOptions = {
@@ -37,29 +36,32 @@ export default function QrCodePage() {
     };
     setCurrentDate(new Intl.DateTimeFormat('ar-EG', options).format(today));
 
-    // Function to start and manage intervals
-    const startIntervals = () => {
+    // Initial generation
+    setQrValue(generateQRValue());
+    setProgress(100);
+
+    // Set up the interval to regenerate QR code and reset progress
+    intervalRef.current = setInterval(() => {
       setQrValue(generateQRValue());
       setProgress(100);
+    }, QR_LIFESPAN * 1000);
 
-      intervalRef.current = setInterval(() => {
-        setQrValue(generateQRValue());
-        setProgress(100); // Reset progress when QR changes
-      }, QR_LIFESPAN * 1000);
-
-      progressIntervalRef.current = setInterval(() => {
-        setProgress((prev) => (prev > 0 ? prev - (100 / QR_LIFESPAN) : 0));
-      }, 1000);
-    };
-
-    startIntervals();
-
-    // Cleanup intervals on component unmount
+    // Cleanup interval on component unmount
     return () => {
-      if (intervalRef.current) clearInterval(intervalRef.current);
-      if (progressIntervalRef.current) clearInterval(progressIntervalRef.current);
+      if (intervalRef.current) {
+        clearInterval(intervalRef.current);
+      }
     };
   }, []);
+
+  // Separate effect for progress bar animation
+  useEffect(() => {
+    if (progress > 0) {
+      const timer = setTimeout(() => setProgress(prev => prev - (100 / QR_LIFESPAN)), 1000);
+      return () => clearTimeout(timer);
+    }
+  }, [progress]);
+
 
   return (
     <div className="flex-1 space-y-4 p-4 md:p-8 pt-6">
