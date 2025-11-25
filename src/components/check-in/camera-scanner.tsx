@@ -15,7 +15,7 @@ import {
 import { cn } from '@/lib/utils';
 import jsQR from 'jsqr';
 import { useToast } from '@/hooks/use-toast';
-import type { GeoLocation } from '@/lib/types';
+import type { GeoLocation, Employee } from '@/lib/types';
 import { useRouter } from 'next/navigation';
 
 
@@ -28,6 +28,7 @@ const DEFAULT_COMPANY_LOCATION: GeoLocation = {
 };
 const ALLOWED_RADIUS_METERS = 200; // Allow check-in within 200 meters
 const QR_LIFESPAN_MS = 15 * 1000; // 15 seconds
+const CHECK_IN_LOCKOUT_MS = 60 * 60 * 1000; // 1 hour
 
 export function CameraScanner() {
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -38,7 +39,7 @@ export function CameraScanner() {
   const router = useRouter();
 
   const [cameraStatus, setCameraStatus] = useState<CameraStatus>('loading');
-  const [dialog, setDialog] = useState<{ open: boolean; title: string; description: string; variant: 'success' | 'error' }>({ open: false, title: '', description: '', variant: 'success' });
+  const [dialog, setDialog] = useState<{ open: boolean; title: string; description: string; variant: 'success' | 'error' | 'info' }>({ open: false, title: '', description: '', variant: 'success' });
   const [companyLocation, setCompanyLocation] = useState<GeoLocation>(DEFAULT_COMPANY_LOCATION);
   
   useEffect(() => {
@@ -158,9 +159,17 @@ export function CameraScanner() {
       return { valid: true, reason: 'صالح' };
   };
 
-  const handleAction = (type: 'in' | 'out', qrCodeData: string) => {
+  const handleAction = (qrCodeData: string) => {
     stopCamera();
     setCameraStatus('geolocating');
+
+    // Get current user (mocked)
+    const userJson = localStorage.getItem('currentUser');
+    if (!userJson) {
+        setDialog({ open: true, title: 'خطأ', description: 'لم يتم العثور على بيانات المستخدم. الرجاء تسجيل الدخول.', variant: 'error' });
+        return;
+    }
+    const currentUser: Employee = JSON.parse(userJson);
 
     if (!navigator.geolocation) {
          setDialog({ open: true, title: 'خطأ في تحديد الموقع', description: 'خدمة تحديد المواقع غير مدعومة في هذا المتصفح.', variant: 'error' });
@@ -173,17 +182,47 @@ export function CameraScanner() {
         const validation = validateCheckIn(qrCodeData, position.coords);
         
         if (!validation.valid) {
-            setDialog({ open: true, title: 'فشل تسجيل الدخول', description: validation.reason, variant: 'error' });
+            setDialog({ open: true, title: 'فشل التسجيل', description: validation.reason, variant: 'error' });
             return;
         }
 
-        const time = new Date().toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit' });
-        setDialog({
-            open: true,
-            title: type === 'in' ? 'تم تسجيل الحضور بنجاح' : 'تم تسجيل الانصراف بنجاح',
-            description: `الوقت المسجل: ${time}`,
-            variant: 'success'
-        });
+        const now = Date.now();
+        const today = new Date().toISOString().split('T')[0];
+        const lastScanKey = `lastScan_${currentUser.id}_${today}`;
+        const lastScanTimestamp = localStorage.getItem(lastScanKey);
+        
+        const timeString = new Date().toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit' });
+
+        if (!lastScanTimestamp) {
+            // First scan of the day -> Check-in
+            localStorage.setItem(lastScanKey, now.toString());
+            setDialog({
+                open: true,
+                title: 'تم تسجيل الحضور بنجاح',
+                description: `الوقت المسجل: ${timeString}`,
+                variant: 'success'
+            });
+        } else {
+            const lastScanTime = parseInt(lastScanTimestamp, 10);
+            if (now - lastScanTime < CHECK_IN_LOCKOUT_MS) {
+                // Scanned again within 1 hour
+                setDialog({
+                    open: true,
+                    title: 'تم التسجيل مسبقًا',
+                    description: 'لقد قمت بتسجيل الحضور بالفعل منذ فترة قصيرة.',
+                    variant: 'info'
+                });
+            } else {
+                // Scanned after 1 hour -> Check-out
+                // Here you might want to save it differently
+                setDialog({
+                    open: true,
+                    title: 'تم تسجيل الانصراف بنجاح',
+                    description: `الوقت المسجل: ${timeString}`,
+                    variant: 'success'
+                });
+            }
+        }
       },
       (error) => {
         let description = 'فشل تحديد الموقع. يرجى التأكد من تفعيل خدمة المواقع.';
@@ -212,9 +251,7 @@ export function CameraScanner() {
             });
 
             if (code) {
-                // To keep it simple, we'll just handle "check-in" for any valid QR.
-                // In a real app, the QR might contain the action type.
-                handleAction('in', code.data);
+                handleAction(code.data);
                 return; // Stop scanning
             }
         }
@@ -231,6 +268,12 @@ export function CameraScanner() {
     // Restart camera after closing dialog to allow another scan
     startCamera();
   }
+
+  const DialogIcon = {
+      success: <CheckCircle className="h-12 w-12 text-green-500 mb-2" />,
+      error: <XCircle className="h-12 w-12 text-destructive mb-2" />,
+      info: <Clock className="h-12 w-12 text-blue-500 mb-2" />
+  };
 
   const OverlayIcon = {
     loading: <Loader2 className="h-12 w-12 animate-spin" />,
@@ -271,10 +314,7 @@ export function CameraScanner() {
       <AlertDialog open={dialog.open} onOpenChange={(open) => !open && onDialogClose()}>
         <AlertDialogContent dir="rtl">
           <AlertDialogHeader className="items-center">
-             {dialog.variant === 'success' ? 
-                <CheckCircle className="h-12 w-12 text-green-500 mb-2" /> :
-                <XCircle className="h-12 w-12 text-destructive mb-2" />
-             }
+             {DialogIcon[dialog.variant]}
             <AlertDialogTitle>{dialog.title}</AlertDialogTitle>
             <AlertDialogDescription className="text-center">
               {dialog.description}
