@@ -21,8 +21,8 @@ import { format } from 'date-fns';
 import { ar } from 'date-fns/locale';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useSearchParams } from 'next/navigation';
-import { useFirestore, useCollection, useMemoFirebase, useUser } from '@/firebase';
-import { collection, query, where, Timestamp } from 'firebase/firestore';
+import { useFirestore, useCollection, useDoc, useMemoFirebase, useUser } from '@/firebase';
+import { collection, doc, query, where, Timestamp } from 'firebase/firestore';
 import type { AttendanceRecord, Employee } from '@/lib/types';
 import { Skeleton } from '@/components/ui/skeleton';
 
@@ -67,21 +67,22 @@ export default function AttendancePage() {
 
   const attendanceQuery = useMemoFirebase(() => {
     if (!firestore || !user) return null;
+    
+    // For regular users, ALWAYS fetch only their own data.
+    if (!isSuperUser) {
+        return query(collection(firestore, 'attendance'), where('employeeId', '==', user.uid));
+    }
+    
+    // For SuperUser, apply filters
     let q = query(collection(firestore, 'attendance'));
-
-    if (isSuperUser) {
-        if (startDate) {
-            q = query(q, where('date', '>=', format(startDate, 'yyyy-MM-dd')));
-        }
-        if (endDate) {
-            q = query(q, where('date', '<=', format(endDate, 'yyyy-MM-dd')));
-        }
-        if (selectedEmployee !== 'all') {
-            q = query(q, where('employeeId', '==', selectedEmployee));
-        }
-    } else {
-        // Regular user only sees their own records
-        q = query(q, where('employeeId', '==', user.uid));
+    if (startDate) {
+        q = query(q, where('date', '>=', format(startDate, 'yyyy-MM-dd')));
+    }
+    if (endDate) {
+        q = query(q, where('date', '<=', format(endDate, 'yyyy-MM-dd')));
+    }
+    if (selectedEmployee !== 'all') {
+        q = query(q, where('employeeId', '==', selectedEmployee));
     }
     
     return q;
@@ -128,7 +129,15 @@ export default function AttendancePage() {
   const hasActiveFilters = startDate !== undefined || endDate !== undefined || selectedEmployee !== 'all';
   const isLoading = (isSuperUser && employeesLoading) || attendanceLoading || (!isSuperUser && selfEmployeeLoading);
 
-  const finalEmployeesList = isSuperUser ? employees : (selfEmployee ? [selfEmployee] : []);
+  const employeeMap = useMemo(() => {
+    const map = new Map<string, Employee>();
+    if (isSuperUser && employees) {
+        employees.forEach(e => map.set(e.id, e));
+    } else if (selfEmployee) {
+        map.set(selfEmployee.id, selfEmployee);
+    }
+    return map;
+  }, [employees, selfEmployee, isSuperUser]);
 
   return (
     <div className="flex-1 space-y-4 p-4 md:p-8 pt-6">
@@ -232,7 +241,7 @@ export default function AttendancePage() {
             <TableBody>
               {attendanceRecords && attendanceRecords.length > 0 ? (
                 attendanceRecords.map((record) => {
-                  const employee = finalEmployeesList?.find(e => e.id === record.employeeId);
+                  const employee = employeeMap.get(record.employeeId);
                   return (
                   <TableRow key={record.id}>
                     <TableCell>
@@ -244,7 +253,7 @@ export default function AttendancePage() {
                             data-ai-hint={employee?.avatarHint}
                           />
                           <AvatarFallback>
-                            {record.employeeName.charAt(0)}
+                            {record.employeeName?.charAt(0) || '?'}
                           </AvatarFallback>
                         </Avatar>
                         <div>
