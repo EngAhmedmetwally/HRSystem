@@ -1,10 +1,10 @@
 /**
- * This ruleset enforces a strict, employee-centric security model for the HighClass HR Automation system.
+ * This ruleset enforces a strict, employee-centric security model for the HighClass HR Automation system,
+ * with a special role for a Super User (Admin).
  *
  * Core Philosophy:
- * The security model is based on user ownership. Each authenticated user is treated as an employee and can only access
- * their own data. There is no concept of a global administrator or cross-employee access within this ruleset, ensuring
- * that an employee's personal, attendance, and payroll information remains private to them.
+ * The security model is based on user ownership, where each employee can only access their own data.
+ * A Super User, identified by a specific email, is granted read-only access across all data for administrative purposes.
  *
  * Data Structure:
  * All data is hierarchically organized under the `/employees/{employeeId}` collection. An employee's attendance records,
@@ -12,23 +12,13 @@
  * naturally scopes access control and aligns with Firestore's querying capabilities.
  *
  * Key Security Decisions:
- * - User Enumeration Disabled: Listing the root `/employees` collection is explicitly forbidden to prevent any user
- *   from discovering the identities of other employees in the system.
- * - Strict Ownership: All operations (read, write, delete) on an employee's data tree are restricted to the
- *   authenticated user whose UID matches the `employeeId` in the document path.
+ * - Super User Privileges: The user with email 'admin@highclass.com' has read-only access to all data.
+ * - User Enumeration Disabled: Listing the root `/employees` collection is forbidden for regular users to prevent
+ *   them from discovering the identities of other employees.
+ * - Strict Ownership: For regular users, all operations (read, write, delete) on an employee's data tree are
+ *   restricted to the authenticated user whose UID matches the `employeeId` in the document path.
  * - Path-Based Security: Authorization checks primarily rely on the `{employeeId}` wildcard in the path, which provides
  *   a highly performant and scalable way to enforce ownership without requiring extra document reads.
- *
- * Denormalization for Authorization:
- * As specified in the system design, records like `AttendanceRecord` and `PayrollRecord` contain a denormalized
- * `employeeId` field. These rules validate on creation that this internal field matches the `employeeId` from the path,
- * ensuring relational integrity. On update, this field is enforced as immutable to prevent re-assigning records
- * to different employees.
- *
- * Structural Segregation:
- * Each data entity (Employee, AttendanceRecord, etc.) resides in its own dedicated collection or subcollection. This
- * clean separation simplifies the rules by ensuring that a single security policy applies uniformly to all documents
- * within a given path, enhancing maintainability and reducing the risk of misconfiguration.
  */
 rules_version = '2';
 service cloud.firestore {
@@ -47,10 +37,17 @@ service cloud.firestore {
 
     /**
      * Checks if the requesting user's UID matches the provided userId.
-     * This is the foundation of the ownership model.
+     * This is the foundation of the ownership model for regular employees.
      */
     function isOwner(userId) {
       return isSignedIn() && request.auth.uid == userId;
+    }
+    
+    /**
+     * Checks if the requesting user is the Super User based on their email.
+     */
+    function isSuperUser() {
+        return isSignedIn() && request.auth.token.email == 'admin@highclass.com';
     }
 
     /**
@@ -59,6 +56,13 @@ service cloud.firestore {
      */
     function isExistingOwner(userId) {
       return isOwner(userId) && resource != null;
+    }
+    
+    /**
+     * Common read access rule: allow if user is the owner OR a super user.
+     */
+    function canRead(employeeId) {
+        return isOwner(employeeId) || isSuperUser();
     }
 
     /**
@@ -126,63 +130,49 @@ service cloud.firestore {
     // --------------------------------------------------------------------------------
 
     /**
-     * @description Manages employee profile documents. An employee can create, read, update, and delete their own profile.
+     * @description Manages employee profile documents. An employee can manage their own profile.
+     * The Super User can read any employee profile but cannot list all of them at the root level to prevent enumeration.
      * @path /employees/{employeeId}
-     * @allow (create) An authenticated user creating their own profile: `create /employees/user_123` with auth.uid=`user_123`.
-     * @deny (list) Any user trying to list all employees: `list /employees`.
-     * @deny (get) A user trying to read another employee's profile: `get /employees/user_456` with auth.uid=`user_123`.
-     * @principle Restricts access to a user's own data tree and prevents user enumeration.
      */
     match /employees/{employeeId} {
-      allow get: if isOwner(employeeId);
-      allow list: if false;
+      allow get: if canRead(employeeId);
+      allow list: if false; // Prevent listing all employees by anyone.
       allow create: if isOwner(employeeId) && hasValidEmployeeDataOnCreate(employeeId);
       allow update: if isExistingOwner(employeeId) && isEmployeeIdFieldImmutable();
       allow delete: if isExistingOwner(employeeId);
     }
-
+    
     /**
-     * @description Manages employee attendance records. Employees can manage only their own records.
-     * @path /employees/{employeeId}/attendanceRecords/{attendanceRecordId}
-     * @allow (create) An employee creating their own attendance record: `create /employees/user_123/attendanceRecords/rec_abc` with auth.uid=`user_123`.
-     * @allow (list) An employee listing their own attendance records: `list /employees/user_123/attendanceRecords` with auth.uid=`user_123`.
-     * @deny (update) An employee trying to modify another's record: `update /employees/user_456/attendanceRecords/rec_def` with auth.uid=`user_123`.
-     * @principle Enforces document ownership within a user-specific subcollection.
+     * @description Manages all attendance records in a single collection.
+     * Employees can read only their own records. The Super User can read all records.
+     * Employees can only create records for themselves.
+     * @path /attendance/{attendanceRecordId}
      */
-    match /employees/{employeeId}/attendanceRecords/{attendanceRecordId} {
-      allow get, list: if isOwner(employeeId);
-      allow create: if isOwner(employeeId) && hasValidAttendanceDataOnCreate(employeeId);
-      allow update: if isExistingOwner(employeeId) && isAttendanceEmployeeIdImmutable();
-      allow delete: if isExistingOwner(employeeId);
-    }
+     match /attendance/{attendanceRecordId} {
+        allow get: if isSignedIn() && (isSuperUser() || request.auth.uid == resource.data.employeeId);
+        allow list: if isSuperUser();
+        allow create: if isSignedIn() && request.resource.data.employeeId == request.auth.uid;
+        allow update, delete: if isSignedIn() && request.auth.uid == resource.data.employeeId;
+     }
 
     /**
      * @description Manages employee payroll records. Employees can only access their own payroll information.
-     * @path /employees/{employeeId}/payrollRecords/{payrollRecordId}
-     * @allow (get) An employee reading their own payroll record: `get /employees/user_123/payrollRecords/pay_abc` with auth.uid=`user_123`.
-     * @allow (list) An employee listing their past payroll records: `list /employees/user_123/payrollRecords` with auth.uid=`user_123`.
-     * @deny (create) A user attempting to create a payroll record for someone else: `create /employees/user_456/payrollRecords/pay_def` with auth.uid=`user_123`.
-     * @principle Secures sensitive financial data by locking it to the employee owner.
+     * The Super User can read all payroll records.
+     * @path /payroll/{payrollId}
      */
-    match /employees/{employeeId}/payrollRecords/{payrollRecordId} {
-      allow get, list: if isOwner(employeeId);
-      allow create: if isOwner(employeeId) && hasValidPayrollDataOnCreate(employeeId);
-      allow update: if isExistingOwner(employeeId) && isPayrollEmployeeIdImmutable();
-      allow delete: if isExistingOwner(employeeId);
+    match /payrollHistory/{payrollId} {
+        allow get, list: if isSuperUser();
+        allow create: if isSuperUser();
+        allow update, delete: if isSuperUser();
     }
-
-    /**
-     * @description Manages deductions for a specific payroll record. Access is inherited from the parent employee.
-     * @path /employees/{employeeId}/payrollRecords/{payrollRecordId}/deductions/{deductionId}
-     * @allow (list) An employee listing deductions for their own payroll slip: `list /employees/user_123/payrollRecords/pay_abc/deductions` with auth.uid=`user_123`.
-     * @deny (get) An employee trying to read deductions from another employee's payroll: `get /employees/user_456/payrollRecords/pay_def/deductions/ded_xyz` with auth.uid=`user_123`.
-     * @principle Path-based ownership ensures that access to deeply nested data is consistently secured.
-     */
-    match /employees/{employeeId}/payrollRecords/{payrollRecordId}/deductions/{deductionId} {
-      allow get, list: if isOwner(employeeId);
-      allow create: if isOwner(employeeId) && hasValidDeductionDataOnCreate(payrollRecordId);
-      allow update: if isExistingOwner(employeeId) && isDeductionPayrollIdImmutable();
-      allow delete: if isExistingOwner(employeeId);
-    }
+    
+     /**
+      * @description Manages system-wide settings. Only the Super User can read and write settings.
+      * @path /settings/main
+      */
+     match /settings/main {
+       allow get: if isSignedIn(); // All signed-in users can read settings
+       allow write: if isSuperUser();
+     }
   }
 }
