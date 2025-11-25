@@ -12,7 +12,7 @@
  * naturally scopes access control and aligns with Firestore's querying capabilities.
  *
  * Key Security Decisions:
- * - Super User Privileges: The user with email 'admin@highclass.com' has read-only access to all data.
+ * - Super User Privileges: The user with email 'admin@highclass.com' or 'qdmin@highclass.com' has read-only access to all data.
  * - User Enumeration Disabled: Listing the root `/employees` collection is forbidden for regular users to prevent
  *   them from discovering the identities of other employees.
  * - Strict Ownership: For regular users, all operations (read, write, delete) on an employee's data tree are
@@ -47,7 +47,7 @@ service cloud.firestore {
      * Checks if the requesting user is the Super User based on their email.
      */
     function isSuperUser() {
-        return isSignedIn() && request.auth.token.email == 'admin@highclass.com';
+        return isSignedIn() && (request.auth.token.email == 'admin@highclass.com' || request.auth.token.email == 'qdmin@highclass.com');
     }
 
     /**
