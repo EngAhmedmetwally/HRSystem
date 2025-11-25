@@ -9,6 +9,12 @@ export type Employee = {
   };
   avatarUrl: string;
   avatarHint: string;
+  workSchedule: {
+    type: 'default' | 'custom';
+    startTime?: string;
+    endTime?: string;
+    weekends: ('السبت' | 'الأحد' | 'الاثنين' | 'الثلاثاء' | 'الأربعاء' | 'الخميس' | 'الجمعة')[];
+  };
 };
 
 export type AttendanceRecord = {

@@ -13,7 +13,8 @@ export const employees: Employee[] = [
     role: 'مهندس برمجيات', 
     department: 'التطوير',
     salary: { base: 1200000, allowances: 300000 },
-    ...getPlaceholderImage('employee-1') 
+    ...getPlaceholderImage('employee-1'),
+    workSchedule: { type: 'default', weekends: ['الجمعة', 'السبت'] }
   },
   { 
     id: '2', 
@@ -21,7 +22,8 @@ export const employees: Employee[] = [
     role: 'مديرة مشروع', 
     department: 'الإدارة',
     salary: { base: 2000000, allowances: 500000 },
-    ...getPlaceholderImage('employee-2') 
+    ...getPlaceholderImage('employee-2'),
+    workSchedule: { type: 'default', weekends: ['الجمعة', 'السبت'] }
   },
   { 
     id: '3', 
@@ -29,7 +31,8 @@ export const employees: Employee[] = [
     role: 'مصمم واجهات', 
     department: 'التصميم',
     salary: { base: 900000, allowances: 200000 },
-    ...getPlaceholderImage('employee-3') 
+    ...getPlaceholderImage('employee-3'),
+    workSchedule: { type: 'custom', startTime: '10:00', endTime: '18:00', weekends: ['الجمعة', 'السبت'] }
   },
   { 
     id: '4', 
@@ -37,7 +40,8 @@ export const employees: Employee[] = [
     role: 'محللة بيانات',
     department: 'البيانات',
     salary: { base: 1500000, allowances: 350000 },
-     ...getPlaceholderImage('employee-4') 
+     ...getPlaceholderImage('employee-4'),
+    workSchedule: { type: 'default', weekends: ['الجمعة', 'السبت'] }
     },
   { 
     id: '5', 
@@ -45,7 +49,8 @@ export const employees: Employee[] = [
     role: 'مهندس DevOps',
     department: 'العمليات',
     salary: { base: 1800000, allowances: 400000 },
-    ...getPlaceholderImage('employee-5') 
+    ...getPlaceholderImage('employee-5'),
+    workSchedule: { type: 'default', weekends: ['الجمعة'] }
   },
 ];
 
