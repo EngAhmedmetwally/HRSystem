@@ -66,26 +66,27 @@ export function SidebarNav() {
         <SidebarMenu>
           {navItems.map((item) => (
             <SidebarMenuItem key={item.href}>
-              <Link href={item.href} legacyBehavior passHref>
-                <SidebarMenuButton
-                  isActive={pathname === item.href}
-                  tooltip={item.label}
-                >
+              <SidebarMenuButton
+                asChild
+                isActive={pathname === item.href}
+                tooltip={item.label}
+              >
+                <Link href={item.href}>
                   <item.icon />
                   <span>{item.label}</span>
-                </SidebarMenuButton>
-              </Link>
+                </Link>
+              </SidebarMenuButton>
             </SidebarMenuItem>
           ))}
         </SidebarMenu>
         <SidebarMenu className='mt-4'>
           <SidebarMenuItem>
-            <Link href="/check-in" legacyBehavior passHref>
-              <SidebarMenuButton tooltip="تسجيل الحضور/الانصراف">
+            <SidebarMenuButton asChild tooltip="تسجيل الحضور/الانصراف">
+              <Link href="/check-in">
                 <Camera />
                 <span>تسجيل الحضور/الانصراف</span>
-              </SidebarMenuButton>
-            </Link>
+              </Link>
+            </SidebarMenuButton>
           </SidebarMenuItem>
         </SidebarMenu>
       </SidebarContent>
