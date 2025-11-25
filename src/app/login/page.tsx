@@ -16,7 +16,7 @@ import { Label } from '@/components/ui/label';
 import { Landmark, Loader2 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth, useUser } from '@/firebase';
-import { signInWithEmailAndPassword } from 'firebase/auth';
+import { signInWithEmailAndPassword, createUserWithEmailAndPassword } from 'firebase/auth';
 
 export default function LoginPage() {
   const router = useRouter();
@@ -43,7 +43,6 @@ export default function LoginPage() {
     }
     setIsLoading(true);
 
-    // Simple logic to handle 'Admin' username
     const emailToLogin = identifier.toLowerCase() === 'admin' ? 'admin@highclass.com' : identifier;
 
     try {
@@ -53,15 +52,34 @@ export default function LoginPage() {
         });
         // The useUser hook will detect the new user state and the useEffect above will redirect
       } catch (error: any) {
-        let description = 'حدث خطأ غير متوقع.';
-        if (error.code === 'auth/user-not-found' || error.code === 'auth/wrong-password' || error.code === 'auth/invalid-credential' || error.code === 'auth/invalid-email') {
-          description = 'اسم المستخدم أو كلمة المرور غير صحيحة.';
+        // Special case: If admin user doesn't exist, create it on first login attempt.
+        if (emailToLogin === 'admin@highclass.com' && (error.code === 'auth/user-not-found' || error.code === 'auth/invalid-credential')) {
+          try {
+            await createUserWithEmailAndPassword(auth, emailToLogin, password);
+            toast({
+              title: 'تم إنشاء حساب المدير وتسجيل الدخول',
+              description: 'مرحباً بك! تم إعداد حساب المدير الخارق بنجاح.',
+            });
+            // The onAuthStateChanged listener in useUser will handle the redirect.
+          } catch (creationError: any) {
+            toast({
+              variant: 'destructive',
+              title: 'فشل إنشاء حساب المدير',
+              description: creationError.message || 'حدث خطأ غير متوقع أثناء محاولة إنشاء حساب المدير.',
+            });
+          }
+        } else {
+          // Handle other generic login errors
+          let description = 'حدث خطأ غير متوقع.';
+          if (error.code === 'auth/user-not-found' || error.code === 'auth/wrong-password' || error.code === 'auth/invalid-credential' || error.code === 'auth/invalid-email') {
+            description = 'اسم المستخدم أو كلمة المرور غير صحيحة.';
+          }
+          toast({
+            variant: 'destructive',
+            title: 'فشل تسجيل الدخول',
+            description,
+          });
         }
-        toast({
-          variant: 'destructive',
-          title: 'فشل تسجيل الدخول',
-          description,
-        });
       } finally {
         setIsLoading(false);
       }
