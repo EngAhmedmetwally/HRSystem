@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useState } from 'react';
@@ -13,11 +14,13 @@ import { Trash2, PlusCircle } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { Separator } from '@/components/ui/separator';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
+import { cn } from '@/lib/utils';
 
 const deductionRuleSchema = z.object({
   delayMinutes: z.coerce.number().min(1, 'يجب أن تكون قيمة موجبة'),
   deductionType: z.enum(['minutes', 'hours', 'amount']),
   deductionValue: z.coerce.number().min(1, 'يجب أن تكون قيمة موجبة'),
+  period: z.enum(['daily', 'monthly']),
 });
 
 const settingsSchema = z.object({
@@ -38,8 +41,8 @@ export default function SettingsPage() {
     gracePeriod: 10,
     gracePeriodType: 'daily',
     deductionRules: [
-      { delayMinutes: 15, deductionType: 'minutes', deductionValue: 30 },
-      { delayMinutes: 30, deductionType: 'hours', deductionValue: 1 },
+      { delayMinutes: 15, deductionType: 'minutes', deductionValue: 30, period: 'daily' },
+      { delayMinutes: 30, deductionType: 'hours', deductionValue: 1, period: 'daily' },
     ],
   });
 
@@ -167,64 +170,88 @@ export default function SettingsPage() {
                 <div className="space-y-4">
                 <Label>قواعد الخصم من التأخير</Label>
                 {fields.map((field, index) => (
-                    <div key={field.id} className="flex flex-col sm:flex-row items-start sm:items-end gap-4 p-4 border rounded-lg bg-secondary/50">
-                    <div className="grid gap-2 flex-1 w-full">
-                        <Label>إذا تأخر الموظف</Label>
-                        <div className="flex items-center gap-2">
-                        <Input
-                            type="number"
-                            {...register(`deductionRules.${index}.delayMinutes`)}
-                            className="w-24"
-                        />
-                        <span>دقيقة</span>
+                    <div key={field.id} className="flex flex-col gap-4 p-4 border rounded-lg bg-secondary/50">
+                        <div className="flex flex-col sm:flex-row items-start sm:items-end gap-4">
+                            <div className="grid gap-2 flex-1 w-full">
+                                <Label>إذا تأخر الموظف</Label>
+                                <div className="flex items-center gap-2">
+                                <Input
+                                    type="number"
+                                    {...register(`deductionRules.${index}.delayMinutes`)}
+                                    className="w-24"
+                                />
+                                <span>دقيقة</span>
+                                </div>
+                                {errors.deductionRules?.[index]?.delayMinutes && (
+                                    <p className="text-sm text-destructive">{errors.deductionRules?.[index]?.delayMinutes?.message}</p>
+                                )}
+                            </div>
+                            
+                            <div className="grid gap-2 flex-1 w-full">
+                                <Label>يتم خصم</Label>
+                                <div className="flex items-center gap-2">
+                                    <Input
+                                    type="number"
+                                    {...register(`deductionRules.${index}.deductionValue`)}
+                                    className="w-24"
+                                    />
+                                    <Controller
+                                        control={control}
+                                        name={`deductionRules.${index}.deductionType`}
+                                        render={({ field: selectField }) => (
+                                            <Select
+                                            value={selectField.value}
+                                            onValueChange={selectField.onChange}
+                                            >
+                                            <SelectTrigger className="w-[120px]">
+                                                <SelectValue placeholder="نوع الخصم" />
+                                            </SelectTrigger>
+                                            <SelectContent>
+                                                <SelectItem value="minutes">دقيقة</SelectItem>
+                                                <SelectItem value="hours">ساعة</SelectItem>
+                                                <SelectItem value="amount">مبلغ</SelectItem>
+                                            </SelectContent>
+                                            </Select>
+                                        )}
+                                    />
+                                </div>
+                                {errors.deductionRules?.[index]?.deductionValue && (
+                                    <p className="text-sm text-destructive">{errors.deductionRules?.[index]?.deductionValue?.message}</p>
+                                )}
+                            </div>
+
+                            <Button
+                                type="button"
+                                variant="destructive"
+                                size="icon"
+                                onClick={() => remove(index)}
+                                className="shrink-0 mt-4 sm:mt-0"
+                            >
+                                <Trash2 className="h-4 w-4" />
+                            </Button>
                         </div>
-                        {errors.deductionRules?.[index]?.delayMinutes && (
-                            <p className="text-sm text-destructive">{errors.deductionRules?.[index]?.delayMinutes?.message}</p>
-                        )}
-                    </div>
-                    
-                    <div className="grid gap-2 flex-1 w-full">
-                        <Label>يتم خصم</Label>
-                        <div className="flex items-center gap-2">
-                            <Input
-                            type="number"
-                            {...register(`deductionRules.${index}.deductionValue`)}
-                            className="w-24"
-                            />
-                            <Controller
+                        <div className="w-full">
+                             <Controller
                                 control={control}
-                                name={`deductionRules.${index}.deductionType`}
-                                render={({ field: selectField }) => (
-                                    <Select
-                                    value={selectField.value}
-                                    onValueChange={selectField.onChange}
-                                    >
-                                    <SelectTrigger className="w-[120px]">
-                                        <SelectValue placeholder="نوع الخصم" />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                        <SelectItem value="minutes">دقيقة</SelectItem>
-                                        <SelectItem value="hours">ساعة</SelectItem>
-                                        <SelectItem value="amount">مبلغ</SelectItem>
-                                    </SelectContent>
-                                    </Select>
+                                name={`deductionRules.${index}.period`}
+                                render={({ field }) => (
+                                <RadioGroup
+                                    onValueChange={field.onChange}
+                                    defaultValue={field.value}
+                                    className="flex gap-4 items-center pt-2"
+                                >
+                                    <Label className={cn("text-xs flex items-center gap-2 border p-2 px-3 rounded-md cursor-pointer has-[input:checked]:bg-primary has-[input:checked]:text-primary-foreground")}>
+                                        <RadioGroupItem value="daily" id={`r-daily-${index}`} />
+                                        يوميًا
+                                    </Label>
+                                    <Label className={cn("text-xs flex items-center gap-2 border p-2 px-3 rounded-md cursor-pointer has-[input:checked]:bg-primary has-[input:checked]:text-primary-foreground")}>
+                                        <RadioGroupItem value="monthly" id={`r-monthly-${index}`} />
+                                        شهريًا
+                                    </Label>
+                                </RadioGroup>
                                 )}
                             />
                         </div>
-                        {errors.deductionRules?.[index]?.deductionValue && (
-                            <p className="text-sm text-destructive">{errors.deductionRules?.[index]?.deductionValue?.message}</p>
-                        )}
-                    </div>
-
-                    <Button
-                        type="button"
-                        variant="destructive"
-                        size="icon"
-                        onClick={() => remove(index)}
-                        className="shrink-0 mt-4 sm:mt-0"
-                    >
-                        <Trash2 className="h-4 w-4" />
-                    </Button>
                     </div>
                 ))}
                 {errors.deductionRules && typeof errors.deductionRules === 'object' && !Array.isArray(errors.deductionRules) && (
@@ -234,7 +261,7 @@ export default function SettingsPage() {
                 <Button
                     type="button"
                     variant="outline"
-                    onClick={() => append({ delayMinutes: 60, deductionType: 'hours', deductionValue: 2 })}
+                    onClick={() => append({ delayMinutes: 60, deductionType: 'hours', deductionValue: 2, period: 'daily' })}
                 >
                     <PlusCircle className="ml-2 h-4 w-4" />
                     إضافة قاعدة جديدة
@@ -250,3 +277,5 @@ export default function SettingsPage() {
     </div>
   );
 }
+
+    
