@@ -50,10 +50,10 @@ export function SidebarNav() {
   const currentUser = employees[1];
 
   return (
-    <Sidebar>
+    <Sidebar side="right">
       <SidebarHeader>
-        <div className="flex items-center gap-2">
-          <Button variant="ghost" size="icon" className="shrink-0 bg-primary text-primary-foreground hover:bg-primary/90 hover:text-primary-foreground rounded-lg">
+        <div className="flex items-center gap-3">
+          <Button variant="ghost" size="icon" className="shrink-0 bg-sidebar-primary text-sidebar-primary-foreground hover:bg-sidebar-primary/90 hover:text-sidebar-primary-foreground rounded-lg">
             <Landmark className="h-5 w-5" />
           </Button>
           <div className={cn("flex flex-col gap-0 overflow-hidden transition-all duration-300", state === 'collapsed' ? 'w-0' : 'w-auto')}>
@@ -96,7 +96,7 @@ export function SidebarNav() {
           <DropdownMenuTrigger asChild>
             <div
               className={cn(
-                'flex w-full cursor-pointer items-center gap-2 rounded-md p-2 text-left text-sm outline-none ring-sidebar-ring transition-colors hover:bg-sidebar-accent hover:text-sidebar-accent-foreground focus-visible:ring-2',
+                'flex w-full cursor-pointer items-center gap-3 rounded-md p-2 text-left text-sm outline-none ring-sidebar-ring transition-colors hover:bg-sidebar-accent hover:text-sidebar-accent-foreground focus-visible:ring-2',
                 state === 'collapsed' && 'justify-center size-12 p-0'
               )}
             >

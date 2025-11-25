@@ -3,44 +3,44 @@
 @tailwind utilities;
 
 body {
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: 'Cairo', sans-serif;
 }
 
 @layer base {
   :root {
-    --background: 220 33% 90%;
-    --foreground: 228 44% 27%;
+    --background: 220 33% 97%;
+    --foreground: 228 44% 17%;
     --card: 0 0% 100%;
-    --card-foreground: 228 44% 27%;
+    --card-foreground: 228 44% 17%;
     --popover: 0 0% 100%;
-    --popover-foreground: 228 44% 27%;
+    --popover-foreground: 228 44% 17%;
     --primary: 228 44% 27%;
     --primary-foreground: 0 0% 98%;
-    --secondary: 220 20% 96%;
+    --secondary: 220 20% 94%;
     --secondary-foreground: 228 44% 27%;
-    --muted: 220 20% 96%;
+    --muted: 220 20% 94%;
     --muted-foreground: 228 20% 45%;
-    --accent: 259 55% 77%;
+    --accent: 259 55% 82%;
     --accent-foreground: 228 44% 17%;
     --destructive: 0 84.2% 60.2%;
     --destructive-foreground: 0 0% 98%;
-    --border: 220 20% 80%;
-    --input: 220 20% 85%;
+    --border: 220 20% 88%;
+    --input: 220 20% 92%;
     --ring: 228 44% 27%;
     --chart-1: 228 44% 27%;
     --chart-2: 259 55% 77%;
     --chart-3: 228 30% 50%;
     --chart-4: 259 40% 60%;
     --chart-5: 220 33% 80%;
-    --radius: 0.5rem;
-    --sidebar-background: 0 0% 100%;
-    --sidebar-foreground: 228 44% 27%;
-    --sidebar-primary: 228 44% 27%;
-    --sidebar-primary-foreground: 0 0% 98%;
-    --sidebar-accent: 220 33% 90%;
-    --sidebar-accent-foreground: 228 44% 27%;
-    --sidebar-border: 220 13% 88%;
-    --sidebar-ring: 228 44% 27%;
+    --radius: 0.8rem;
+    --sidebar-background: 228 44% 22%;
+    --sidebar-foreground: 220 33% 95%;
+    --sidebar-primary: 0 0% 98%;
+    --sidebar-primary-foreground: 228 44% 22%;
+    --sidebar-accent: 228 44% 27%;
+    --sidebar-accent-foreground: 0 0% 98%;
+    --sidebar-border: 228 44% 30%;
+    --sidebar-ring: 259 55% 77%;
   }
   .dark {
     --background: 228 20% 10%;
@@ -67,7 +67,7 @@ body {
     --chart-3: 259 40% 60%;
     --chart-4: 228 30% 50%;
     --chart-5: 220 33% 80%;
-    --sidebar-background: 228 20% 15%;
+    --sidebar-background: 228 20% 12%;
     --sidebar-foreground: 220 33% 90%;
     --sidebar-primary: 259 55% 77%;
     --sidebar-primary-foreground: 228 20% 10%;
