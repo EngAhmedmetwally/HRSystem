@@ -33,11 +33,17 @@ export default function QrCodePage() {
     // Set up an interval to refresh the QR code and the progress bar
     const intervalId = setInterval(() => {
       setQrValue(generateQRValue());
-      setProgress(100);
     }, QR_LIFESPAN * 1000);
     
+    // This interval is for the visual progress bar
     const progressIntervalId = setInterval(() => {
-        setProgress(prev => Math.max(0, prev - (100 / QR_LIFESPAN)));
+        setProgress(prev => {
+            const newProgress = prev - (100 / QR_LIFESPAN);
+            if (newProgress <= 0) {
+                return 100; // Reset for the next cycle
+            }
+            return newProgress;
+        });
     }, 1000);
 
 
@@ -64,11 +70,17 @@ export default function QrCodePage() {
           </CardHeader>
           <CardContent className="flex flex-col items-center gap-4">
              <div className="p-6 bg-white rounded-lg shadow-md">
-                <QRCode
-                  value={qrValue}
-                  size={256}
-                  viewBox={`0 0 256 256`}
-                />
+                {qrValue ? (
+                  <QRCode
+                    value={qrValue}
+                    size={256}
+                    viewBox={`0 0 256 256`}
+                  />
+                ) : (
+                   <div className="w-[256px] h-[256px] flex items-center justify-center bg-gray-100 text-sm text-gray-500">
+                     جاري إنشاء الرمز...
+                   </div>
+                )}
               </div>
 
             <div className="w-full space-y-2">

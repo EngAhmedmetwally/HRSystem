@@ -16,6 +16,7 @@ import { cn } from '@/lib/utils';
 import jsQR from 'jsqr';
 import { useToast } from '@/hooks/use-toast';
 import type { GeoLocation } from '@/lib/types';
+import { useRouter } from 'next/navigation';
 
 
 type CameraStatus = 'loading' | 'active' | 'error' | 'inactive' | 'validating' | 'geolocating';
@@ -34,6 +35,7 @@ export function CameraScanner() {
   const streamRef = useRef<MediaStream | null>(null);
   const animationFrameId = useRef<number>();
   const { toast } = useToast();
+  const router = useRouter();
 
   const [cameraStatus, setCameraStatus] = useState<CameraStatus>('loading');
   const [dialog, setDialog] = useState<{ open: boolean; title: string; description: string; variant: 'success' | 'error' }>({ open: false, title: '', description: '', variant: 'success' });
@@ -56,6 +58,7 @@ export function CameraScanner() {
   const stopCamera = () => {
     if (animationFrameId.current) {
       cancelAnimationFrame(animationFrameId.current);
+      animationFrameId.current = undefined;
     }
     if (streamRef.current) {
       streamRef.current.getTracks().forEach(track => track.stop());
@@ -65,9 +68,27 @@ export function CameraScanner() {
       }
     }
   };
+  
+  // This effect will run when the component unmounts.
+  useEffect(() => {
+    return () => {
+      stopCamera();
+    };
+  }, []);
+
+  // This effect handles router events to stop the camera when navigating away.
+  // This is a bit of a workaround for Next.js App Router behavior.
+  useEffect(() => {
+    // We can't directly use router events here in the same way as pages router.
+    // The unmount effect (`return () => stopCamera()`) is the primary mechanism.
+  }, [router]);
+
 
   const startCamera = async () => {
-    stopCamera();
+    // Ensure camera is stopped before starting a new stream
+    if (streamRef.current) {
+      stopCamera();
+    }
     setCameraStatus('loading');
     try {
       if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
@@ -83,6 +104,10 @@ export function CameraScanner() {
         videoRef.current.onloadedmetadata = () => {
           setCameraStatus('active');
           scanQRCode();
+        };
+        // Add a handler for when the video stream ends unexpectedly
+        videoRef.current.onended = () => {
+            setCameraStatus('inactive');
         };
       }
     } catch (err) {
@@ -199,7 +224,6 @@ export function CameraScanner() {
 
   useEffect(() => {
     startCamera();
-    return () => stopCamera();
   }, []);
 
   const onDialogClose = () => {
@@ -222,7 +246,7 @@ export function CameraScanner() {
       error: 'خطأ في الوصول إلى الكاميرا. يرجى منح الإذن والمحاولة مرة أخرى.',
       geolocating: 'جاري تحديد موقعك الجغرافي...',
       validating: 'جاري التحقق من البيانات...',
-      inactive: '',
+      inactive: 'تم إيقاف الكاميرا',
       active: null,
   }
 
