@@ -36,15 +36,17 @@ export default function QrCodePage() {
     };
     setCurrentDate(new Intl.DateTimeFormat('ar-EG', options).format(today));
 
-    // Initial generation
-    setQrValue(generateQRValue());
-    setProgress(100);
-
-    // Set up the interval to regenerate QR code and reset progress
-    intervalRef.current = setInterval(() => {
+    // Function to regenerate QR and reset progress
+    const regenerateQrCode = () => {
       setQrValue(generateQRValue());
       setProgress(100);
-    }, QR_LIFESPAN * 1000);
+    };
+
+    // Initial generation
+    regenerateQrCode();
+
+    // Set up the interval to regenerate QR code every QR_LIFESPAN seconds
+    intervalRef.current = setInterval(regenerateQrCode, QR_LIFESPAN * 1000);
 
     // Cleanup interval on component unmount
     return () => {
@@ -57,7 +59,11 @@ export default function QrCodePage() {
   // Separate effect for progress bar animation
   useEffect(() => {
     if (progress > 0) {
-      const timer = setTimeout(() => setProgress(prev => prev - (100 / QR_LIFESPAN)), 1000);
+      // Calculate the decrement step to ensure it reaches 0 in QR_LIFESPAN seconds
+      const decrementStep = 100 / QR_LIFESPAN;
+      const timer = setTimeout(() => {
+        setProgress(prev => Math.max(0, prev - decrementStep));
+      }, 1000);
       return () => clearTimeout(timer);
     }
   }, [progress]);
@@ -77,12 +83,13 @@ export default function QrCodePage() {
             <CardTitle>رمز QR لتسجيل الحضور والانصراف</CardTitle>
             <CardDescription>{currentDate}</CardDescription>
           </CardHeader>
-          <CardContent className="flex flex-col items-center gap-4">
-            <div style={{ background: 'white', padding: '16px', borderRadius: 'var(--radius)' }}>
+          <CardContent className="flex flex-col items-center gap-6">
+            <div style={{ height: "auto", margin: "0 auto", maxWidth: 256, width: "100%", background: 'white', padding: '16px', borderRadius: 'var(--radius)' }}>
               {qrValue ? (
                 <QRCode
-                  value={qrValue}
                   size={256}
+                  style={{ height: "auto", maxWidth: "100%", width: "100%" }}
+                  value={qrValue}
                   viewBox={`0 0 256 256`}
                 />
               ) : (
