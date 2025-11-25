@@ -142,7 +142,7 @@ export default function EmployeesPage() {
         if (editingEmployee) {
             // Update existing employee in Firestore
             const employeeDocRef = doc(firestore, 'employees', editingEmployee.id);
-            const updatedData: Partial<Employee> = {
+            const updatedData: Partial<Omit<Employee, 'id' | 'avatarUrl' | 'avatarHint'>> = {
                 name: data.name,
                 email: data.email, // Note: Changing email in Auth is a separate, complex process
                 role: data.role,
@@ -174,29 +174,31 @@ export default function EmployeesPage() {
             const userCredential = await createUserWithEmailAndPassword(auth, data.email, data.password);
             const newUserId = userCredential.user.uid;
 
-            // 2. Create employee document in Firestore
-            const newEmployeeDocRef = doc(firestore, 'employees', newUserId);
-            const newEmployee: Omit<Employee, 'id'> = {
-                name: data.name,
-                email: data.email,
-                role: data.role,
-                department: data.department,
-                salary: {
-                    base: data.baseSalary,
-                    allowances: data.allowances,
-                },
-                workSchedule: {
-                    type: data.workScheduleType,
-                    startTime: data.startTime,
-                    endTime: data.endTime,
-                    weekends: data.weekends,
-                },
-                allowedScreens: data.allowedScreens,
-                avatarUrl: `https://picsum.photos/seed/${newUserId}/100/100`,
-                avatarHint: 'person',
-            };
-            setDocumentNonBlocking(newEmployeeDocRef, newEmployee, {});
-            toast({ title: "تم إضافة الموظف بنجاح" });
+            // 2. Create employee document in Firestore ONLY if it's not the admin user
+            if (data.email.toLowerCase() !== 'admin@highclass.com') {
+                const newEmployeeDocRef = doc(firestore, 'employees', newUserId);
+                const newEmployee: Omit<Employee, 'id'> = {
+                    name: data.name,
+                    email: data.email,
+                    role: data.role,
+                    department: data.department,
+                    salary: {
+                        base: data.baseSalary,
+                        allowances: data.allowances,
+                    },
+                    workSchedule: {
+                        type: data.workScheduleType,
+                        startTime: data.startTime,
+                        endTime: data.endTime,
+                        weekends: data.weekends,
+                    },
+                    allowedScreens: data.allowedScreens,
+                    avatarUrl: `https://picsum.photos/seed/${newUserId}/100/100`,
+                    avatarHint: 'person',
+                };
+                setDocumentNonBlocking(newEmployeeDocRef, newEmployee, {});
+            }
+            toast({ title: "تم إضافة المستخدم بنجاح" });
         }
         closeDialog();
     } catch (error: any) {

@@ -75,10 +75,12 @@ export function SidebarNav() {
   const { user, isUserLoading } = useUser();
   const auth = useAuth();
   const firestore = useFirestore();
+
+  const isSuperUser = user?.email === 'admin@highclass.com';
   
   const employeeDocRef = useMemoFirebase(
-    () => (user ? doc(firestore, 'employees', user.uid) : null),
-    [user, firestore]
+    () => (user && !isSuperUser ? doc(firestore, 'employees', user.uid) : null),
+    [user, firestore, isSuperUser]
   );
   const { data: employeeData, isLoading: isEmployeeLoading } = useDoc<Employee>(employeeDocRef);
 
@@ -89,11 +91,12 @@ export function SidebarNav() {
   }, [isUserLoading, user, router]);
 
   const visibleScreens = useMemo(() => {
-    // Special admin case
-    if (user?.email === 'admin@highclass.com') {
-      return allScreens.filter(s => s.id !== 'my-attendance'); // Admin doesn't need "My Attendance"
+    // Super user gets all screens except their own attendance page
+    if (isSuperUser) {
+      return allScreens.filter(s => s.id !== 'my-attendance');
     }
-    if (!employeeData) return [allScreens.find(s => s.id === 'my-attendance')].filter(Boolean); // Default for employee
+    // Regular employee logic
+    if (!employeeData) return [allScreens.find(s => s.id === 'my-attendance')].filter(Boolean); // Default for employee while loading
     
     const allowed = employeeData.allowedScreens || [];
     // Ensure "My Attendance" is always available for logged-in employees
@@ -102,7 +105,7 @@ export function SidebarNav() {
     }
 
     return allScreens.filter(screen => allowed.includes(screen.id));
-  }, [employeeData, user]);
+  }, [employeeData, isSuperUser]);
 
   const handleLogout = async () => {
     if (auth) {
@@ -112,19 +115,19 @@ export function SidebarNav() {
   };
 
   const currentUserDisplay = useMemo(() => {
-    if (user?.email === 'admin@highclass.com') {
+    if (isSuperUser) {
         return {
             name: 'المدير العام',
-            role: 'Administrator',
+            role: 'Super User',
             avatarUrl: undefined,
             avatarHint: 'admin user',
         }
     }
     return employeeData;
-  }, [user, employeeData]);
+  }, [isSuperUser, employeeData]);
 
 
-  if (isUserLoading || (user && !currentUserDisplay && !isEmployeeLoading)) {
+  if (isUserLoading || (user && !isSuperUser && !employeeData && isEmployeeLoading)) {
     return <SidebarSkeleton />;
   }
   
