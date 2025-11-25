@@ -89,7 +89,7 @@ export function SidebarNav() {
   }, [isUserLoading, user, router]);
 
   const visibleScreens = useMemo(() => {
-    // Special admin case (hardcoded for now)
+    // Special admin case
     if (user?.email === 'admin@highclass.com') {
       return allScreens.filter(s => s.id !== 'my-attendance'); // Admin doesn't need "My Attendance"
     }
