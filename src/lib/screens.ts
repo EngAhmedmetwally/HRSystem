@@ -1,8 +1,9 @@
-import { LayoutDashboard, Users, UserPlus, QrCode, Wallet, Settings } from 'lucide-react';
+import { LayoutDashboard, Users, UserPlus, QrCode, Wallet, Settings, UserCheck } from 'lucide-react';
 import type { Screen } from './types';
 
 export const screens: Screen[] = [
   { id: 'dashboard', href: '/dashboard', label: 'لوحة التحكم', icon: LayoutDashboard },
+  { id: 'my-attendance', href: '/dashboard/my-attendance', label: 'حضوري', icon: UserCheck },
   { id: 'attendance', href: '/dashboard/attendance', label: 'سجل الحضور', icon: Users },
   { id: 'employees', href: '/dashboard/employees', label: 'الموظفين', icon: UserPlus },
   { id: 'qr-code', href: '/dashboard/qr-code', label: 'رمز QR', icon: QrCode },
