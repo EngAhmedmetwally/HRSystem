@@ -40,10 +40,10 @@ const weekDays = ['السبت', 'الأحد', 'الاثنين', 'الثلاثا�
 
 const employeeSchema = z.object({
   name: z.string().min(1, 'الاسم مطلوب'),
-  email: z.string().email('بريد إلكتروني غير صالح'),
+  email: z.string().optional(),
   password: z.string().optional(),
   role: z.string().min(1, 'الوظيفة مطلوبة'),
-  department: z.string().min(1, 'القسم مطلوب'),
+  department: z.string().optional(),
   baseSalary: z.coerce.number().min(0, 'الراتب الأساسي يجب أن يكون رقمًا موجبًا'),
   allowances: z.coerce.number().min(0, 'البدلات يجب أن تكون رقمًا موجبًا'),
   workScheduleType: z.enum(['default', 'custom']),
@@ -139,12 +139,14 @@ export default function EmployeesPage() {
     if (!firestore) return;
     
     try {
+        const finalEmail = data.email || `${data.name.replace(/\s+/g, '.').toLowerCase()}@highclass.com`;
+
         if (editingEmployee) {
             // Update existing employee in Firestore
             const employeeDocRef = doc(firestore, 'employees', editingEmployee.id);
             const updatedData: Partial<Omit<Employee, 'id' | 'avatarUrl' | 'avatarHint'>> = {
                 name: data.name,
-                email: data.email, // Note: Changing email in Auth is a separate, complex process
+                email: finalEmail,
                 role: data.role,
                 department: data.department,
                 salary: {
@@ -171,15 +173,15 @@ export default function EmployeesPage() {
             
             // 1. Always create user in Firebase Auth first
             const auth = getAuth();
-            const userCredential = await createUserWithEmailAndPassword(auth, data.email, data.password);
+            const userCredential = await createUserWithEmailAndPassword(auth, finalEmail, data.password);
             const newUserId = userCredential.user.uid;
 
             // 2. Create employee document in Firestore ONLY if it's NOT the admin user
-            if (data.email.toLowerCase() !== 'admin@highclass.com') {
+            if (finalEmail.toLowerCase() !== 'admin@highclass.com') {
                 const newEmployeeDocRef = doc(firestore, 'employees', newUserId);
                 const newEmployee: Omit<Employee, 'id'> = {
                     name: data.name,
-                    email: data.email,
+                    email: finalEmail,
                     role: data.role,
                     department: data.department,
                     salary: {
@@ -206,6 +208,9 @@ export default function EmployeesPage() {
         let message = "حدث خطأ أثناء حفظ بيانات الموظف.";
         if (error.code === 'auth/email-already-in-use') {
             message = "هذا البريد الإلكتروني مستخدم بالفعل.";
+        }
+        if (error.code === 'auth/invalid-email') {
+            message = "البريد الإلكتروني الذي تم إنشاؤه غير صالح. يرجى إدخال بريد إلكتروني صالح يدويًا.";
         }
         toast({ variant: 'destructive', title: 'خطأ', description: message });
     }
@@ -261,8 +266,8 @@ export default function EmployeesPage() {
                     {errors.name && <p className="text-sm text-destructive mt-1">{errors.name.message}</p>}
                   </div>
                    <div>
-                    <Label htmlFor="email">البريد الإلكتروني</Label>
-                    <Input id="email" type="email" {...register('email')} disabled={!!editingEmployee} />
+                    <Label htmlFor="email">البريد الإلكتروني (اختياري)</Label>
+                    <Input id="email" type="email" {...register('email')} placeholder="سيتم إنشاؤه تلقائيًا إذا ترك فارغًا" />
                     {errors.email && <p className="text-sm text-destructive mt-1">{errors.email.message}</p>}
                   </div>
                    <div>
@@ -276,7 +281,7 @@ export default function EmployeesPage() {
                     {errors.role && <p className="text-sm text-destructive mt-1">{errors.role.message}</p>}
                   </div>
                    <div>
-                    <Label htmlFor="department">القسم</Label>
+                    <Label htmlFor="department">القسم (اختياري)</Label>
                     <Input id="department" {...register('department')} />
                     {errors.department && <p className="text-sm text-destructive mt-1">{errors.department.message}</p>}
                   </div>
@@ -469,3 +474,5 @@ export default function EmployeesPage() {
     </div>
   );
 }
+
+    

@@ -88,3 +88,5 @@ export type PayrollHistory = {
     totalNetPay: number;
     records: PayrollRecord[];
 }
+
+    
