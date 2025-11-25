@@ -11,6 +11,7 @@ import {
   Settings,
   LogOut,
   Landmark,
+  UserPlus,
 } from 'lucide-react';
 
 import {
@@ -40,6 +41,7 @@ import { employees } from '@/lib/mock-data';
 const navItems = [
   { href: '/dashboard', icon: LayoutDashboard, label: 'لوحة التحكم' },
   { href: '/dashboard/attendance', icon: Users, label: 'سجل الحضور' },
+  { href: '/dashboard/employees', icon: UserPlus, label: 'الموظفين' },
   { href: '/dashboard/qr-code', icon: QrCode, label: 'رمز QR' },
   { href: '/dashboard/payroll', icon: Wallet, label: 'كشف المرتبات' },
 ];
@@ -68,7 +70,7 @@ export function SidebarNav() {
             <SidebarMenuItem key={item.href}>
               <SidebarMenuButton
                 asChild
-                isActive={pathname === item.href}
+                isActive={pathname.startsWith(item.href)}
                 tooltip={item.label}
               >
                 <Link href={item.href}>

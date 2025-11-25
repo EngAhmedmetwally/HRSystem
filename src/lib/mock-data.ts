@@ -7,11 +7,46 @@ const getPlaceholderImage = (id: string) => {
 };
 
 export const employees: Employee[] = [
-  { id: '1', name: 'أحمد محمود', role: 'مهندس برمجيات', ...getPlaceholderImage('employee-1') },
-  { id: '2', name: 'فاطمة الزهراء', role: 'مديرة مشروع', ...getPlaceholderImage('employee-2') },
-  { id: '3', name: 'يوسف علي', role: 'مصمم واجهات', ...getPlaceholderImage('employee-3') },
-  { id: '4', name: 'مريم خالد', role: 'محللة بيانات', ...getPlaceholderImage('employee-4') },
-  { id: '5', name: 'عمر شريف', role: 'مهندس DevOps', ...getPlaceholderImage('employee-5') },
+  { 
+    id: '1', 
+    name: 'أحمد محمود', 
+    role: 'مهندس برمجيات', 
+    department: 'التطوير',
+    salary: { base: 1200000, allowances: 300000 },
+    ...getPlaceholderImage('employee-1') 
+  },
+  { 
+    id: '2', 
+    name: 'فاطمة الزهراء', 
+    role: 'مديرة مشروع', 
+    department: 'الإدارة',
+    salary: { base: 2000000, allowances: 500000 },
+    ...getPlaceholderImage('employee-2') 
+  },
+  { 
+    id: '3', 
+    name: 'يوسف علي', 
+    role: 'مصمم واجهات', 
+    department: 'التصميم',
+    salary: { base: 900000, allowances: 200000 },
+    ...getPlaceholderImage('employee-3') 
+  },
+  { 
+    id: '4', 
+    name: 'مريم خالد', 
+    role: 'محللة بيانات',
+    department: 'البيانات',
+    salary: { base: 1500000, allowances: 350000 },
+     ...getPlaceholderImage('employee-4') 
+    },
+  { 
+    id: '5', 
+    name: 'عمر شريف', 
+    role: 'مهندس DevOps',
+    department: 'العمليات',
+    salary: { base: 1800000, allowances: 400000 },
+    ...getPlaceholderImage('employee-5') 
+  },
 ];
 
 export const attendanceRecords: AttendanceRecord[] = [
@@ -23,9 +58,9 @@ export const attendanceRecords: AttendanceRecord[] = [
 ];
 
 export const weeklyAttendance = [
-    { day: 'الأحد', حاضر: 28, غائب: 2 },
-    { day: 'الاثنين', حاضر: 30, غائب: 0 },
-    { day: 'الثلاثاء', حاضر: 27, غائب: 3 },
-    { day: 'الأربعاء', حاضر: 29, غائب: 1 },
-    { day: 'الخميس', حاضر: 25, غائب: 5 },
+    { day: 'الأحد', حاضر: 4, غائب: 1 },
+    { day: 'الاثنين', حاضر: 5, غائب: 0 },
+    { day: 'الثلاثاء', حاضر: 4, غائب: 1 },
+    { day: 'الأربعاء', حاضر: 5, غائب: 0 },
+    { day: 'الخميس', حاضر: 3, غائب: 2 },
 ];
