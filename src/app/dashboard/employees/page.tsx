@@ -270,7 +270,7 @@ export default function EmployeesPage() {
               </div>
               
               <div className="space-y-4 border-t pt-4">
-                 <Label>إعدادات الدوام</Label>
+                 <Label>اعدادات الشيفت</Label>
                  <Controller
                     control={control}
                     name="workScheduleType"
@@ -436,5 +436,3 @@ export default function EmployeesPage() {
     </div>
   );
 }
-
-    
