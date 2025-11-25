@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useState, useMemo } from 'react';
@@ -18,15 +19,13 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { Button } from '@/components/ui/button';
 import { CalendarIcon, FilterX } from 'lucide-react';
 import { Calendar } from '@/components/ui/calendar';
-import { DateRange } from 'react-day-picker';
 import { format } from 'date-fns';
 import { ar } from 'date-fns/locale';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import type { AttendanceRecord } from '@/lib/types';
-
 
 export default function AttendancePage() {
-  const [dateRange, setDateRange] = useState<DateRange | undefined>(undefined);
+  const [startDate, setStartDate] = useState<Date | undefined>(undefined);
+  const [endDate, setEndDate] = useState<Date | undefined>(undefined);
   const [selectedEmployee, setSelectedEmployee] = useState<string>('all');
 
   const getStatusVariant = (status: 'حاضر' | 'غائب' | 'في إجازة') => {
@@ -43,18 +42,23 @@ export default function AttendancePage() {
   const filteredRecords = useMemo(() => {
     return attendanceRecords.filter((record) => {
       const recordDate = new Date(record.date);
-      const isDateInRange = !dateRange?.from || (recordDate >= dateRange.from && (!dateRange.to || recordDate <= dateRange.to));
+      recordDate.setHours(0, 0, 0, 0);
+
+      const isAfterStartDate = !startDate || recordDate >= startDate;
+      const isBeforeEndDate = !endDate || recordDate <= endDate;
       const isEmployeeMatch = selectedEmployee === 'all' || record.employee.id === selectedEmployee;
-      return isDateInRange && isEmployeeMatch;
+      
+      return isAfterStartDate && isBeforeEndDate && isEmployeeMatch;
     });
-  }, [dateRange, selectedEmployee]);
+  }, [startDate, endDate, selectedEmployee]);
   
   const clearFilters = () => {
-    setDateRange(undefined);
+    setStartDate(undefined);
+    setEndDate(undefined);
     setSelectedEmployee('all');
   };
 
-  const hasActiveFilters = dateRange !== undefined || selectedEmployee !== 'all';
+  const hasActiveFilters = startDate !== undefined || endDate !== undefined || selectedEmployee !== 'all';
 
   return (
     <div className="flex-1 space-y-4 p-4 md:p-8 pt-6">
@@ -67,40 +71,51 @@ export default function AttendancePage() {
       <Card>
         <CardHeader>
           <CardTitle>قائمة الحضور والانصراف</CardTitle>
-           <div className="flex flex-col sm:flex-row gap-4 items-center pt-4">
+           <div className="flex flex-col sm:flex-row flex-wrap gap-4 items-center pt-4">
               <Popover>
                 <PopoverTrigger asChild>
                   <Button
-                    id="date"
                     variant={'outline'}
                     className={cn(
-                      'w-full sm:w-[300px] justify-end text-right font-normal',
-                      !dateRange && 'text-muted-foreground'
+                      'w-full sm:w-[240px] justify-end text-right font-normal',
+                      !startDate && 'text-muted-foreground'
                     )}
                   >
                     <CalendarIcon className="ml-2 h-4 w-4" />
-                    {dateRange?.from ? (
-                      dateRange.to ? (
-                        <>
-                          {format(dateRange.from, 'LLL dd, y', { locale: ar })} -{' '}
-                          {format(dateRange.to, 'LLL dd, y', { locale: ar })}
-                        </>
-                      ) : (
-                        format(dateRange.from, 'LLL dd, y', { locale: ar })
-                      )
-                    ) : (
-                      <span>اختر فترة زمنية</span>
-                    )}
+                    {startDate ? format(startDate, 'PPP', { locale: ar }) : <span>من تاريخ</span>}
                   </Button>
                 </PopoverTrigger>
                 <PopoverContent className="w-auto p-0" align="start">
                   <Calendar
+                    mode="single"
+                    selected={startDate}
+                    onSelect={setStartDate}
                     initialFocus
-                    mode="range"
-                    defaultMonth={dateRange?.from}
-                    selected={dateRange}
-                    onSelect={setDateRange}
-                    numberOfMonths={2}
+                    locale={ar}
+                  />
+                </PopoverContent>
+              </Popover>
+              
+               <Popover>
+                <PopoverTrigger asChild>
+                  <Button
+                    variant={'outline'}
+                    className={cn(
+                      'w-full sm:w-[240px] justify-end text-right font-normal',
+                      !endDate && 'text-muted-foreground'
+                    )}
+                  >
+                     <CalendarIcon className="ml-2 h-4 w-4" />
+                    {endDate ? format(endDate, 'PPP', { locale: ar }) : <span>إلى تاريخ</span>}
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-auto p-0" align="start">
+                  <Calendar
+                    mode="single"
+                    selected={endDate}
+                    onSelect={setEndDate}
+                    disabled={{ before: startDate }}
+                    initialFocus
                     locale={ar}
                   />
                 </PopoverContent>
