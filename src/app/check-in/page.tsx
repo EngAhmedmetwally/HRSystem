@@ -25,9 +25,9 @@ function CheckInContent() {
           <CameraScanner />
        </Suspense>
       <Button asChild variant="link" className="mt-8 text-primary-foreground">
-        <Link href="/dashboard">
+        <Link href="/">
           <ArrowRight className="ml-2 h-4 w-4" />
-          العودة إلى لوحة التحكم
+          العودة إلى الشاشة الرئيسية
         </Link>
       </Button>
     </main>
