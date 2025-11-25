@@ -9,14 +9,12 @@ import {
   CardDescription,
 } from '@/components/ui/card';
 import QRCode from 'react-qr-code';
-import { Progress } from '@/components/ui/progress';
 
 const QR_LIFESPAN = 15; // in seconds
 
 export default function QrCodePage() {
   const [currentDate, setCurrentDate] = useState('');
   const [qrValue, setQrValue] = useState('');
-  const [progress, setProgress] = useState(100);
   const intervalRef = useRef<NodeJS.Timeout | null>(null);
 
   const generateQRValue = () => {
@@ -36,10 +34,9 @@ export default function QrCodePage() {
     };
     setCurrentDate(new Intl.DateTimeFormat('ar-EG', options).format(today));
 
-    // Function to regenerate QR and reset progress
+    // Function to regenerate QR
     const regenerateQrCode = () => {
       setQrValue(generateQRValue());
-      setProgress(100);
     };
 
     // Initial generation
@@ -55,23 +52,6 @@ export default function QrCodePage() {
       }
     };
   }, []);
-
-  // Separate effect for progress bar animation
-  useEffect(() => {
-    if (qrValue) { // Only run progress if there's a QR value
-      const progressInterval = setInterval(() => {
-        setProgress(prev => {
-          const nextProgress = prev - (100 / QR_LIFESPAN);
-          if (nextProgress <= 0) {
-            return 0;
-          }
-          return nextProgress;
-        });
-      }, 1000);
-
-      return () => clearInterval(progressInterval);
-    }
-  }, [qrValue]);
 
 
   return (
@@ -102,14 +82,6 @@ export default function QrCodePage() {
                 </div>
               )}
             </div>
-
-            <div className="w-full space-y-2">
-              <Progress value={progress} className="h-2" />
-              <p className="text-xs text-muted-foreground">
-                يتغير الرمز تلقائياً كل {QR_LIFESPAN} ثانية
-              </p>
-            </div>
-
             <p className="text-muted-foreground pt-4">
               يقوم الموظفون بمسح هذا الرمز لتسجيل وقت الحضور والانصراف.
             </p>
