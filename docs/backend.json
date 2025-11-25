@@ -20,7 +20,7 @@
         },
         "employeeId": {
           "type": "string",
-          "description": "The unique indentifier asigned to the employee by the company."
+          "description": "The employee ID assigned by the company."
         },
         "email": {
           "type": "string",
@@ -31,6 +31,10 @@
           "type": "string",
           "description": "The employee's phone number."
         },
+        "departmentId": {
+          "type": "string",
+          "description": "Reference to Department. (Relationship: Department 1:N Employee)"
+        },
         "hireDate": {
           "type": "string",
           "description": "The date the employee was hired.",
@@ -39,10 +43,6 @@
         "jobTitle": {
           "type": "string",
           "description": "The employee's job title."
-        },
-        "department": {
-          "type": "string",
-          "description": "The department the employee belongs to."
         }
       },
       "required": [
@@ -51,17 +51,40 @@
         "lastName",
         "employeeId",
         "email",
-        "phoneNumber",
+        "departmentId",
         "hireDate",
-        "jobTitle",
-        "department"
+        "jobTitle"
+      ]
+    },
+    "Department": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "Department",
+      "type": "object",
+      "description": "Represents a department within the company.",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique identifier for the Department entity."
+        },
+        "name": {
+          "type": "string",
+          "description": "The name of the department."
+        },
+        "description": {
+          "type": "string",
+          "description": "A description of the department."
+        }
+      },
+      "required": [
+        "id",
+        "name"
       ]
     },
     "AttendanceRecord": {
       "$schema": "http://json-schema.org/draft-07/schema#",
       "title": "AttendanceRecord",
       "type": "object",
-      "description": "Represents an employee's attendance record, including check-in and check-out times.",
+      "description": "Represents an individual attendance record for an employee.",
       "properties": {
         "id": {
           "type": "string",
@@ -81,23 +104,19 @@
           "description": "The time the employee checked out.",
           "format": "date-time"
         },
-        "date": {
-          "type": "string",
-          "description": "The date of the attendance record.",
-          "format": "date-time"
-        },
         "location": {
           "type": "string",
-          "description": "The location from where the check-in/out was recorded (e.g., GPS coordinates)."
+          "description": "The location (e.g., GPS coordinates) of the check-in/out."
+        },
+        "qrCodeData": {
+          "type": "string",
+          "description": "The data from the QR code that was scanned."
         }
       },
       "required": [
         "id",
         "employeeId",
-        "checkInTime",
-        "checkOutTime",
-        "date",
-        "location"
+        "checkInTime"
       ]
     },
     "PayrollRecord": {
@@ -114,14 +133,14 @@
           "type": "string",
           "description": "Reference to Employee. (Relationship: Employee 1:N PayrollRecord)"
         },
-        "startDate": {
+        "payPeriodStart": {
           "type": "string",
-          "description": "The start date of the payroll period.",
+          "description": "The start date of the pay period.",
           "format": "date-time"
         },
-        "endDate": {
+        "payPeriodEnd": {
           "type": "string",
-          "description": "The end date of the payroll period.",
+          "description": "The end date of the pay period.",
           "format": "date-time"
         },
         "grossPay": {
@@ -130,62 +149,58 @@
         },
         "deductions": {
           "type": "number",
-          "description": "The total deductions for the employee for the period."
+          "description": "Total deductions for the period."
         },
         "netPay": {
           "type": "number",
           "description": "The employee's net pay for the period."
-        },
-        "paymentDate": {
-          "type": "string",
-          "description": "The date the employee was paid.",
-          "format": "date-time"
         }
       },
       "required": [
         "id",
         "employeeId",
-        "startDate",
-        "endDate",
+        "payPeriodStart",
+        "payPeriodEnd",
         "grossPay",
         "deductions",
-        "netPay",
-        "paymentDate"
+        "netPay"
       ]
     },
-    "Deduction": {
+    "QrCode": {
       "$schema": "http://json-schema.org/draft-07/schema#",
-      "title": "Deduction",
+      "title": "QrCode",
       "type": "object",
-      "description": "Represents a deduction applied to an employee's payroll.",
+      "description": "Represents a QR code generated by the system.",
       "properties": {
         "id": {
           "type": "string",
-          "description": "Unique identifier for the Deduction entity."
+          "description": "Unique identifier for the QR code."
         },
-        "payrollRecordId": {
+        "employeeId": {
           "type": "string",
-          "description": "Reference to PayrollRecord. (Relationship: PayrollRecord 1:N Deduction)"
+          "description": "Reference to Employee. (Relationship: Employee 1:N QrCode)"
         },
-        "deductionType": {
+        "generatedDate": {
           "type": "string",
-          "description": "The type of deduction (e.g., tax, insurance)."
+          "description": "The date and time the QR code was generated.",
+          "format": "date-time"
         },
-        "amount": {
-          "type": "number",
-          "description": "The amount of the deduction."
-        },
-        "description": {
+        "expirationDate": {
           "type": "string",
-          "description": "A description of the deduction."
+          "description": "The date and time the QR code expires.",
+          "format": "date-time"
+        },
+        "codeData": {
+          "type": "string",
+          "description": "The actual QR code data."
         }
       },
       "required": [
         "id",
-        "payrollRecordId",
-        "deductionType",
-        "amount",
-        "description"
+        "employeeId",
+        "generatedDate",
+        "expirationDate",
+        "codeData"
       ]
     }
   },
@@ -204,11 +219,27 @@
           "schema": {
             "$ref": "#/backend/entities/Employee"
           },
-          "description": "Stores employee profiles. Path-based ownership is applied through the employeeId parameter.",
+          "description": "Stores employee data. Uses path-based ownership. Includes employeeId as a parameter for direct access.",
           "params": [
             {
               "name": "employeeId",
               "description": "The unique identifier for the employee."
+            }
+          ]
+        }
+      },
+      {
+        "path": "/departments/{departmentId}",
+        "definition": {
+          "entityName": "Department",
+          "schema": {
+            "$ref": "#/backend/entities/Department"
+          },
+          "description": "Stores department data. Uses path-based ownership. Includes departmentId as a parameter for direct access.",
+          "params": [
+            {
+              "name": "departmentId",
+              "description": "The unique identifier for the department."
             }
           ]
         }
@@ -220,7 +251,7 @@
           "schema": {
             "$ref": "#/backend/entities/AttendanceRecord"
           },
-          "description": "Stores attendance records for each employee. Includes denormalized 'employeeId' for authorization independence.",
+          "description": "Stores attendance records for each employee.  Nested under the employee path to enforce ownership. Includes employeeId and attendanceRecordId as parameters.",
           "params": [
             {
               "name": "employeeId",
@@ -240,7 +271,7 @@
           "schema": {
             "$ref": "#/backend/entities/PayrollRecord"
           },
-          "description": "Stores payroll records for each employee. Includes denormalized 'employeeId' for authorization independence.",
+          "description": "Stores payroll records for each employee. Nested under the employee path to enforce ownership. Includes employeeId and payrollRecordId as parameters.",
           "params": [
             {
               "name": "employeeId",
@@ -254,30 +285,42 @@
         }
       },
       {
-        "path": "/employees/{employeeId}/payrollRecords/{payrollRecordId}/deductions/{deductionId}",
+        "path": "/employees/{employeeId}/qrCodes/{qrCodeId}",
         "definition": {
-          "entityName": "Deduction",
+          "entityName": "QrCode",
           "schema": {
-            "$ref": "#/backend/entities/Deduction"
+            "$ref": "#/backend/entities/QrCode"
           },
-          "description": "Stores deduction records for each payroll record. Ensures proper nesting of deduction records within the payroll and employee context.",
+          "description": "Stores QR codes generated for each employee. Nested under the employee path to enforce ownership. Includes employeeId and qrCodeId as parameters.",
           "params": [
             {
               "name": "employeeId",
               "description": "The unique identifier for the employee."
             },
             {
-              "name": "payrollRecordId",
-              "description": "The unique identifier for the payroll record."
-            },
+              "name": "qrCodeId",
+              "description": "The unique identifier for the QR code."
+            }
+          ]
+        }
+      },
+      {
+        "path": "/roles_admin/{userId}",
+        "definition": {
+          "entityName": "role_admin",
+          "schema": {
+            "$ref": "#/backend/entities/Employee"
+          },
+          "description": "Stores the id of admin users. Existence of document determines admin rights.  No data is actually stored in documents. Existence over Content.",
+          "params": [
             {
-              "name": "deductionId",
-              "description": "The unique identifier for the deduction."
+              "name": "userId",
+              "description": "User ID of the admin"
             }
           ]
         }
       }
     ],
-    "reasoning": "The Firestore data structure is designed to support the HighClass HR Automation system, focusing on secure, scalable, and easily debuggable data management. The structure is built around the entities: Employees, AttendanceRecords, PayrollRecords, and Deductions. Each entity is stored in its own collection, and where applicable, hierarchical paths are used to represent relationships between entities.\n\n**Authorization Independence:**\nTo ensure Authorization Independence, employeeId is denormalized in the AttendanceRecord and PayrollRecord collections. This allows direct querying and securing of these records based on the employee's ID without needing to perform `get()` calls to the Employees collection. This approach is especially important for maintaining atomicity in operations such as creating attendance or payroll records.\n\n**Structural Segregation:**\nEach entity type is stored in its own collection, ensuring a homogeneous security posture. For instance, all documents within the 'employees' collection share the same security requirements. This segregation simplifies the security rules and makes the system more maintainable.\n\n**Access Modeling:**\nPath-based ownership is used to manage access to employee-specific data. For example, attendance records are stored under `/employees/{employeeId}/attendanceRecords/{attendanceRecordId}`, ensuring that only the employee or authorized personnel can access these records. This pattern provides a clear and efficient way to define ownership and enforce access control.\n\n**QAPs (Rules are not Filters):**\nThe structure supports secure `list` operations by using path-based ownership. Security rules can be written to allow listing of attendance records only for a specific employee, based on the `employeeId` in the path. This prevents unauthorized access to other employees' attendance data.\n\nThis structure supports the requested features, including attendance tracking, payroll generation, and deduction management, while adhering to the core design principles of Authorization Independence, Structural Segregation, and Access Modeling."
+    "reasoning": "The Firestore data structure is designed to support the HighClass HR Automation system, focusing on secure, scalable, and easily maintainable data storage. Key considerations include authorization independence, clarity of intent, and adherence to the DBAC (Database-Based Access Control) principle.\n\n**Authorization Independence:** To avoid hierarchical authorization dependencies, the structure denormalizes authorization-related data. For example, if access to AttendanceRecords needs to be restricted to specific departments or roles, the relevant role information would be duplicated within the AttendanceRecord documents themselves.\n\n**Structural Segregation:** Data is segregated into collections based on access needs. User-specific data is stored under `/users/{userId}` to enforce ownership. Shared or collaborative data utilizes membership maps.\n\n**Access Modeling:** Path-based ownership is employed where applicable (e.g., employees' QR codes). Membership maps are used for collaborative entities (though none exist in the given data model).\n\n**QAPs (Rules are not Filters):** The design accounts for secure `list` operations. The data segregation strategy ensures that listing documents within a collection only returns documents the user is authorized to access.\n\nThe structure ensures Authorization Independence (CRITICAL), supporting the required QAPs (using segregation and/or membership models)."
   }
 }

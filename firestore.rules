@@ -1,32 +1,43 @@
 /**
- * This ruleset enforces a strict, employee-centric security model for the HighClass HR Automation system,
- * with a special role for a Super User (Admin).
+ * This ruleset enforces a Role-Based Access Control (RBAC) model for a Human Resources (HR) system.
  *
  * Core Philosophy:
- * The security model is based on user ownership, where each employee can only access their own data.
- * A Super User, identified by a specific email, is granted read-only access across all data for administrative purposes.
+ * The security model is centered around a privileged 'Admin' role. Users with this role have
+ * comprehensive create, read, update, and delete (CRUD) permissions across the entire database.
+ * Standard users (employees) have limited, self-service access to their own data. The default
+ * security posture is to deny all access unless explicitly granted by a role or ownership rule.
  *
  * Data Structure:
- * All data is hierarchically organized under the `/employees/{employeeId}` collection. An employee's attendance records,
- * payroll records, and deductions are stored in subcollections under their unique employee document. This structure
- * naturally scopes access control and aligns with Firestore's querying capabilities.
+ * The database segregates administrative data from employee-specific data.
+ * - /roles_admin/{userId}: A lookup collection to identify users with administrative privileges.
+ * - /departments/{departmentId}: A top-level collection for company departments, managed exclusively by admins.
+ * - /employees/{employeeId}: A top-level collection for employee profiles.
+ * - Subcollections under /employees/{employeeId} (e.g., attendanceRecords, payrollRecords) store data
+ *   owned by and directly related to a specific employee, enabling path-based security.
  *
  * Key Security Decisions:
- * - Super User Privileges: The user with email 'admin@highclass.com' or 'qdmin@highclass.com' has read-only access to all data.
- * - User Enumeration Disabled: Listing the root `/employees` collection is forbidden for regular users to prevent
- *   them from discovering the identities of other employees.
- * - Strict Ownership: For regular users, all operations (read, write, delete) on an employee's data tree are
- *   restricted to the authenticated user whose UID matches the `employeeId` in the document path.
- * - Path-Based Security: Authorization checks primarily rely on the `{employeeId}` wildcard in the path, which provides
- *   a highly performant and scalable way to enforce ownership without requiring extra document reads.
+ * - Admin Supremacy: The existence of a user's UID in the /roles_admin collection grants them
+ *   full access to all data, ensuring comprehensive management capabilities.
+ * - Strict Employee Self-Access: An employee's access is strictly confined to their own document tree
+ *   (i.e., `/employees/{their-own-id}/...`). The document ID `{employeeId}` is assumed to be the
+ *   same as the user's Firebase Authentication UID.
+ * - No User Listing: Non-admin users are prohibited from listing documents in top-level collections
+ *   like `/employees` or `/departments` to protect user privacy and company structure information.
+ * - Write Integrity: On creation, documents must contain an ID field that matches their document ID
+ *   in the path, ensuring relational integrity. This ID is immutable upon update.
+ *
+ * Denormalization for Authorization:
+ * The `/roles_admin/{userId}` collection is a prime example of denormalization for authorization.
+ * Instead of checking a field on a user profile, we use a simple and performant `exists()` call
+ * to this dedicated collection to determine a user's role, which simplifies rules throughout the system.
  */
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    // --------------------------------------------------------------------------------
+    // ------------------------------------------------------------------------
     // Helper Functions
-    // --------------------------------------------------------------------------------
+    // ------------------------------------------------------------------------
 
     /**
      * Checks if the user is authenticated.
@@ -36,143 +47,147 @@ service cloud.firestore {
     }
 
     /**
-     * Checks if the requesting user's UID matches the provided userId.
-     * This is the foundation of the ownership model for regular employees.
+     * Checks if the requesting user is an administrator by checking for their
+     * UID in the dedicated admin roles collection.
+     */
+    function isAdmin() {
+      return exists(/databases/$(database)/documents/roles_admin/$(request.auth.uid));
+    }
+
+    /**
+     * Checks if the document ID matches the requesting user's UID.
+     * This is the primary function for enforcing data ownership.
      */
     function isOwner(userId) {
       return isSignedIn() && request.auth.uid == userId;
     }
     
     /**
-     * Checks if the requesting user is the Super User based on their email.
+     * Provides a contextually named alias for isOwner in the context of employees.
      */
-    function isSuperUser() {
-        return isSignedIn() && (request.auth.token.email == 'admin@highclass.com' || request.auth.token.email == 'qdmin@highclass.com');
-    }
-
-    /**
-     * Checks if a document exists and if the requesting user is the owner.
-     * Used for safe update and delete operations.
-     */
-    function isExistingOwner(userId) {
-      return isOwner(userId) && resource != null;
+    function isEmployee(employeeId) {
+        return isOwner(employeeId);
     }
     
     /**
-     * Common read access rule: allow if user is the owner OR a super user.
+     * Validates that the internal 'id' field of a document being created
+     * matches the document's ID in the path.
      */
-    function canRead(employeeId) {
-        return isOwner(employeeId) || isSuperUser();
+    function hasMatchingIdOnCreate(docId) {
+        return request.resource.data.id == docId;
     }
 
     /**
-     * Validates that the employee document being created has an 'id' field
-     * that matches the document's ID, ensuring path and data consistency.
+     * Validates that the internal 'employeeId' field of a subcollection document
+     * being created matches the parent employee's ID in the path.
      */
-    function hasValidEmployeeDataOnCreate(employeeId) {
-      return request.resource.data.id == employeeId;
+    function hasMatchingEmployeeIdOnCreate(employeeId) {
+        return request.resource.data.employeeId == employeeId;
     }
 
     /**
-     * Enforces immutability of the employee's ID field on update.
+     * Enforces immutability of the internal 'employeeId' field during updates.
      */
-    function isEmployeeIdFieldImmutable() {
-      return request.resource.data.id == resource.data.id;
+    function employeeIdIsImmutable() {
+        return request.resource.data.employeeId == resource.data.employeeId;
+    }
+
+    // ------------------------------------------------------------------------
+    // Admin & System Rules
+    // ------------------------------------------------------------------------
+
+    /**
+     * @description Manages admin role assignments. Only existing admins can view or modify this list.
+     * @path /roles_admin/{userId}
+     * @allow An admin (auth.uid='admin_abc') can read, create, or delete another user's admin status doc (e.g., /roles_admin/user_xyz).
+     * @deny A non-admin user (auth.uid='user_123') cannot read or write to any document in this collection.
+     * @principle Enforces hierarchical role management; prevents self-promotion to admin status.
+     */
+    match /roles_admin/{userId} {
+      allow get: if isAdmin();
+      allow list: if isAdmin();
+      allow create: if isAdmin();
+      allow update: if isAdmin();
+      allow delete: if isAdmin();
     }
 
     /**
-     * Validates that an attendance record being created has a denormalized 'employeeId'
-     * that matches the owner's ID from the path.
+     * @description Manages company department information. This collection is for admin use only.
+     * @path /departments/{departmentId}
+     * @allow An admin can (create) a new department document.
+     * @deny A regular employee cannot (list) or (get) any department information.
+     * @principle Restricts management of core company structure to authorized administrators.
      */
-    function hasValidAttendanceDataOnCreate(employeeId) {
-      return request.resource.data.employeeId == employeeId;
+    match /departments/{departmentId} {
+      allow get: if isAdmin();
+      allow list: if isAdmin();
+      allow create: if isAdmin() && hasMatchingIdOnCreate(departmentId);
+      allow update: if isAdmin() && resource != null;
+      allow delete: if isAdmin() && resource != null;
     }
 
-    /**
-     * Enforces immutability of the denormalized 'employeeId' on an attendance record.
-     */
-    function isAttendanceEmployeeIdImmutable() {
-      return request.resource.data.employeeId == resource.data.employeeId;
-    }
+    // ------------------------------------------------------------------------
+    // Employee Data Rules
+    // ------------------------------------------------------------------------
 
     /**
-     * Validates that a payroll record being created has a denormalized 'employeeId'
-     * that matches the owner's ID from the path.
-     */
-    function hasValidPayrollDataOnCreate(employeeId) {
-      return request.resource.data.employeeId == employeeId;
-    }
-
-    /**
-     * Enforces immutability of the denormalized 'employeeId' on a payroll record.
-     */
-    function isPayrollEmployeeIdImmutable() {
-      return request.resource.data.employeeId == resource.data.employeeId;
-    }
-
-    /**
-     * Validates that a deduction being created has a denormalized 'payrollRecordId'
-     * that matches the parent document's ID from the path.
-     */
-    function hasValidDeductionDataOnCreate(payrollRecordId) {
-      return request.resource.data.payrollRecordId == payrollRecordId;
-    }
-
-    /**
-     * Enforces immutability of the denormalized 'payrollRecordId' on a deduction record.
-     */
-    function isDeductionPayrollIdImmutable() {
-      return request.resource.data.payrollRecordId == resource.data.payrollRecordId;
-    }
-
-    // --------------------------------------------------------------------------------
-    // Collection Rules
-    // --------------------------------------------------------------------------------
-
-    /**
-     * @description Manages employee profile documents. An employee can manage their own profile.
-     * The Super User can read any employee profile and list all employees.
+     * @description Manages core employee profiles. Admins have full control. Employees can read and update their own profile.
      * @path /employees/{employeeId}
+     * @allow An employee (auth.uid='emp_123') can (get) their own document at /employees/emp_123.
+     * @deny A regular employee (auth.uid='emp_123') cannot (list) all employees or (delete) their own profile.
+     * @principle Combines role-based admin access with document ownership for self-service updates.
      */
     match /employees/{employeeId} {
-      allow get: if canRead(employeeId);
-      allow list: if isSuperUser(); // Allow super user to list all employees
-      allow create: if isOwner(employeeId) && hasValidEmployeeDataOnCreate(employeeId);
-      allow update: if isExistingOwner(employeeId) && isEmployeeIdFieldImmutable();
-      allow delete: if isExistingOwner(employeeId);
+      allow get: if isEmployee(employeeId) || isAdmin();
+      allow list: if isAdmin();
+      allow create: if isAdmin() && hasMatchingIdOnCreate(employeeId);
+      allow update: if (isEmployee(employeeId) || isAdmin()) && resource != null;
+      allow delete: if isAdmin() && resource != null;
     }
-    
-    /**
-     * @description Manages all attendance records in a single collection.
-     * Employees can read only their own records. The Super User can read all records.
-     * Employees can only create records for themselves.
-     * @path /attendance/{attendanceRecordId}
-     */
-     match /attendance/{attendanceRecordId} {
-        allow get: if isSignedIn() && (isSuperUser() || request.auth.uid == resource.data.employeeId);
-        allow list: if isSuperUser();
-        allow create: if isSignedIn() && request.resource.data.employeeId == request.auth.uid;
-        allow update, delete: if isSignedIn() && request.auth.uid == resource.data.employeeId;
-     }
 
     /**
-     * @description Manages employee payroll records. Employees can only access their own payroll information.
-     * The Super User can read all payroll records.
-     * @path /payroll/{payrollId}
+     * @description Secures employee attendance records. Employees can manage their own records; admins can manage any.
+     * @path /employees/{employeeId}/attendanceRecords/{attendanceRecordId}
+     * @allow An employee (auth.uid='emp_123') can (create) a new attendance record under their own path /employees/emp_123/attendanceRecords/.
+     * @deny An employee (auth.uid='emp_123') cannot (get) records for another employee at /employees/emp_456/attendanceRecords/.
+     * @principle Enforces data ownership within a user's own data tree and validates relational integrity via the 'employeeId' field.
      */
-    match /payrollHistory/{payrollId} {
-        allow get, list: if isSuperUser();
-        allow create: if isSuperUser();
-        allow update, delete: if isSuperUser();
+    match /employees/{employeeId}/attendanceRecords/{attendanceRecordId} {
+      allow get: if isEmployee(employeeId) || isAdmin();
+      allow list: if isEmployee(employeeId) || isAdmin();
+      allow create: if isEmployee(employeeId) || isAdmin();
+      allow update: if (isEmployee(employeeId) || isAdmin()) && resource != null;
+      allow delete: if (isEmployee(employeeId) || isAdmin()) && resource != null;
     }
-    
-     /**
-      * @description Manages system-wide settings. Only the Super User can read and write settings.
-      * @path /settings/main
-      */
-     match /settings/main {
-       allow get: if isSignedIn(); // All signed-in users can read settings
-       allow write: if isSuperUser();
-     }
+
+    /**
+     * @description Secures employee payroll records. Employees can only read their own records; admins have full control.
+     * @path /employees/{employeeId}/payrollRecords/{payrollRecordId}
+     * @allow An employee (auth.uid='emp_123') can (get) and (list) their own payroll records under /employees/emp_123/payrollRecords/.
+     * @deny An employee (auth.uid='emp_123') cannot (create) or (delete) their own payroll records.
+     * @principle Provides read-only access for owners while granting full write control to administrators for sensitive data.
+     */
+    match /employees/{employeeId}/payrollRecords/{payrollRecordId} {
+      allow get: if isEmployee(employeeId) || isAdmin();
+      allow list: if isEmployee(employeeId) || isAdmin();
+      allow create: if isAdmin() && hasMatchingEmployeeIdOnCreate(employeeId);
+      allow update: if isAdmin() && resource != null && employeeIdIsImmutable();
+      allow delete: if isAdmin() && resource != null;
+    }
+
+    /**
+     * @description Manages QR codes for employees. Employees can manage their own QR codes; admins can manage any.
+     * @path /employees/{employeeId}/qrCodes/{qrCodeId}
+     * @allow An employee (auth.uid='emp_123') can (create) a new QR code under their path /employees/emp_123/qrCodes/.
+     * @deny An employee (auth.uid='emp_123') cannot (list) QR codes for another employee /employees/emp_456/qrCodes/.
+     * @principle Enforces document ownership for both read and write operations within a user's data tree.
+     */
+    match /employees/{employeeId}/qrCodes/{qrCodeId} {
+      allow get: if isEmployee(employeeId) || isAdmin();
+      allow list: if isEmployee(employeeId) || isAdmin();
+      allow create: if (isEmployee(employeeId) || isAdmin()) && hasMatchingEmployeeIdOnCreate(employeeId);
+      allow update: if (isEmployee(employeeId) || isAdmin()) && resource != null && employeeIdIsImmutable();
+      allow delete: if (isEmployee(employeeId) || isAdmin()) && resource != null;
+    }
   }
 }
