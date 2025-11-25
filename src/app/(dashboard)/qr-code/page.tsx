@@ -22,26 +22,9 @@ export default function QrCodePage() {
 
   const generateQRValue = () => {
     const timestamp = Date.now();
+    // Simple encoding, in a real app, this should be a signed JWT or similar
     const signature = btoa(`TIMESTAMP:${timestamp}`);
     return signature;
-  };
-
-  const startIntervals = () => {
-    // Clear existing intervals before starting new ones
-    if (intervalRef.current) clearInterval(intervalRef.current);
-    if (progressIntervalRef.current) clearInterval(progressIntervalRef.current);
-
-    setQrValue(generateQRValue());
-    setProgress(100);
-
-    intervalRef.current = setInterval(() => {
-      setQrValue(generateQRValue());
-      setProgress(100); // Reset progress when QR changes
-    }, QR_LIFESPAN * 1000);
-
-    progressIntervalRef.current = setInterval(() => {
-      setProgress((prev) => (prev > 0 ? prev - 100 / QR_LIFESPAN : 0));
-    }, 1000);
   };
 
   useEffect(() => {
@@ -53,6 +36,21 @@ export default function QrCodePage() {
       day: 'numeric',
     };
     setCurrentDate(new Intl.DateTimeFormat('ar-EG', options).format(today));
+
+    // Function to start and manage intervals
+    const startIntervals = () => {
+      setQrValue(generateQRValue());
+      setProgress(100);
+
+      intervalRef.current = setInterval(() => {
+        setQrValue(generateQRValue());
+        setProgress(100); // Reset progress when QR changes
+      }, QR_LIFESPAN * 1000);
+
+      progressIntervalRef.current = setInterval(() => {
+        setProgress((prev) => (prev > 0 ? prev - (100 / QR_LIFESPAN) : 0));
+      }, 1000);
+    };
 
     startIntervals();
 
