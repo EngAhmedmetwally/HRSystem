@@ -1,7 +1,7 @@
 
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useForm, useFieldArray, SubmitHandler, Controller } from 'react-hook-form';
 import { z } from 'zod';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -10,7 +10,7 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Trash2, PlusCircle } from 'lucide-react';
+import { Trash2, PlusCircle, LocateFixed, Loader2 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { Separator } from '@/components/ui/separator';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
@@ -29,13 +29,19 @@ const settingsSchema = z.object({
   gracePeriod: z.coerce.number().min(0, 'يجب أن تكون قيمة موجبة أو صفر'),
   gracePeriodType: z.enum(['daily', 'monthly']),
   deductionRules: z.array(deductionRuleSchema),
+  companyLatitude: z.coerce.number().min(-90, 'قيمة غير صالحة').max(90, 'قيمة غير صالحة'),
+  companyLongitude: z.coerce.number().min(-180, 'قيمة غير صالحة').max(180, 'قيمة غير صالحة'),
 });
 
 type SettingsFormValues = z.infer<typeof settingsSchema>;
 
+const SETTINGS_STORAGE_KEY = 'app-settings';
+
 export default function SettingsPage() {
   const { toast } = useToast();
-  const [initialSettings] = useState<SettingsFormValues>({
+  const [isLocating, setIsLocating] = useState(false);
+
+  const [initialSettings, setInitialSettings] = useState<SettingsFormValues>({
     companyStartTime: '09:00',
     companyEndTime: '17:00',
     gracePeriod: 10,
@@ -44,6 +50,8 @@ export default function SettingsPage() {
       { delayMinutes: 15, deductionType: 'minutes', deductionValue: 30, period: 'daily' },
       { delayMinutes: 30, deductionType: 'hours', deductionValue: 1, period: 'daily' },
     ],
+    companyLatitude: 30.0444, // Default Cairo
+    companyLongitude: 31.2357, // Default Cairo
   });
 
   const {
@@ -51,10 +59,22 @@ export default function SettingsPage() {
     handleSubmit,
     control,
     formState: { errors },
+    reset,
+    setValue,
   } = useForm<SettingsFormValues>({
     resolver: zodResolver(settingsSchema),
     defaultValues: initialSettings,
   });
+
+   useEffect(() => {
+    const savedSettings = localStorage.getItem(SETTINGS_STORAGE_KEY);
+    if (savedSettings) {
+      const parsedSettings = JSON.parse(savedSettings);
+      setInitialSettings(parsedSettings);
+      reset(parsedSettings); // Reset form with loaded data
+    }
+  }, [reset]);
+
 
   const { fields, append, remove } = useFieldArray({
     control,
@@ -62,12 +82,34 @@ export default function SettingsPage() {
   });
 
   const onSubmit: SubmitHandler<SettingsFormValues> = (data) => {
-    console.log(data);
+    localStorage.setItem(SETTINGS_STORAGE_KEY, JSON.stringify(data));
     toast({
       title: 'تم حفظ الإعدادات',
       description: 'تم تحديث إعدادات النظام بنجاح.',
     });
   };
+
+  const handleGetCurrentLocation = () => {
+    setIsLocating(true);
+    if (!navigator.geolocation) {
+        toast({ variant: 'destructive', title: 'خطأ', description: 'خدمة تحديد المواقع غير مدعومة.' });
+        setIsLocating(false);
+        return;
+    }
+    navigator.geolocation.getCurrentPosition(
+        (position) => {
+            setValue('companyLatitude', position.coords.latitude, { shouldValidate: true });
+            setValue('companyLongitude', position.coords.longitude, { shouldValidate: true });
+            toast({ title: 'نجاح', description: 'تم تحديد الموقع بنجاح.' });
+            setIsLocating(false);
+        },
+        (error) => {
+            toast({ variant: 'destructive', title: 'خطأ', description: 'فشل تحديد الموقع. يرجى تفعيل الإذن.' });
+            setIsLocating(false);
+        }
+    );
+  };
+
 
   return (
     <div className="flex-1 space-y-4 p-4 md:p-8 pt-6">
@@ -82,7 +124,7 @@ export default function SettingsPage() {
           <CardHeader>
             <CardTitle>الإعدادات العامة للشركة</CardTitle>
             <CardDescription>
-              قم بتعريف القواعد العامة للدوام والتأخيرات والخصومات.
+              قم بتعريف القواعد العامة للدوام والتأخيرات والخصومات والموقع الجغرافي.
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-8">
@@ -115,6 +157,52 @@ export default function SettingsPage() {
                       {errors.companyEndTime.message}
                     </p>
                   )}
+                </div>
+              </div>
+            </div>
+
+            <Separator />
+            
+             {/* Geolocation Settings */}
+            <div className="space-y-4">
+              <Label className="text-lg font-medium">الموقع الجغرافي للشركة</Label>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 p-4 border rounded-lg bg-secondary/30">
+                <div>
+                  <Label htmlFor="companyLatitude">خط العرض (Latitude)</Label>
+                  <Input
+                    id="companyLatitude"
+                    type="number"
+                    step="any"
+                    {...register('companyLatitude')}
+                  />
+                  {errors.companyLatitude && (
+                    <p className="text-sm text-destructive mt-1">
+                      {errors.companyLatitude.message}
+                    </p>
+                  )}
+                </div>
+                <div>
+                  <Label htmlFor="companyLongitude">خط الطول (Longitude)</Label>
+                  <Input
+                    id="companyLongitude"
+                    type="number"
+                     step="any"
+                    {...register('companyLongitude')}
+                  />
+                  {errors.companyLongitude && (
+                    <p className="text-sm text-destructive mt-1">
+                      {errors.companyLongitude.message}
+                    </p>
+                  )}
+                </div>
+                <div className="col-span-full">
+                    <Button type="button" variant="outline" onClick={handleGetCurrentLocation} disabled={isLocating}>
+                         {isLocating ? <Loader2 className="ml-2 h-4 w-4 animate-spin" /> : <LocateFixed className="ml-2 h-4 w-4" />}
+                        تحديد موقعي الحالي
+                    </Button>
+                    <p className="text-xs text-muted-foreground mt-2">
+                        يُستخدم هذا الموقع للتحقق من أن الموظف يسجل حضوره من داخل مقر الشركة.
+                    </p>
                 </div>
               </div>
             </div>
@@ -240,11 +328,11 @@ export default function SettingsPage() {
                                     defaultValue={field.value}
                                     className="flex gap-4 items-center pt-2"
                                 >
-                                    <Label className={cn("text-xs flex items-center gap-2 border p-2 px-3 rounded-md cursor-pointer has-[input:checked]:bg-primary has-[input:checked]:text-primary-foreground")}>
+                                    <Label className={cn("text-xs flex items-center gap-2 border p-2 px-3 rounded-md cursor-pointer has-[input:checked]:bg-primary has-[input-checked]:text-primary-foreground")}>
                                         <RadioGroupItem value="daily" id={`r-daily-${index}`} />
                                         يوميًا
                                     </Label>
-                                    <Label className={cn("text-xs flex items-center gap-2 border p-2 px-3 rounded-md cursor-pointer has-[input:checked]:bg-primary has-[input:checked]:text-primary-foreground")}>
+                                    <Label className={cn("text-xs flex items-center gap-2 border p-2 px-3 rounded-md cursor-pointer has-[input:checked]:bg-primary has-[input-checked]:text-primary-foreground")}>
                                         <RadioGroupItem value="monthly" id={`r-monthly-${index}`} />
                                         شهريًا
                                     </Label>
@@ -277,5 +365,3 @@ export default function SettingsPage() {
     </div>
   );
 }
-
-    

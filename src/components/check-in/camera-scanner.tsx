@@ -14,12 +14,14 @@ import {
 } from '@/components/ui/alert-dialog';
 import { cn } from '@/lib/utils';
 import jsQR from 'jsqr';
+import { useToast } from '@/hooks/use-toast';
+import type { GeoLocation } from '@/lib/types';
+
 
 type CameraStatus = 'loading' | 'active' | 'error' | 'inactive' | 'validating' | 'geolocating';
 
 // --- Configuration ---
-// In a real app, this should come from settings or a config file
-const COMPANY_LOCATION = {
+const DEFAULT_COMPANY_LOCATION: GeoLocation = {
   latitude: 30.0444, // Cairo
   longitude: 31.2357,
 };
@@ -31,10 +33,26 @@ export function CameraScanner() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const animationFrameId = useRef<number>();
+  const { toast } = useToast();
 
   const [cameraStatus, setCameraStatus] = useState<CameraStatus>('loading');
   const [dialog, setDialog] = useState<{ open: boolean; title: string; description: string; variant: 'success' | 'error' }>({ open: false, title: '', description: '', variant: 'success' });
+  const [companyLocation, setCompanyLocation] = useState<GeoLocation>(DEFAULT_COMPANY_LOCATION);
   
+  useEffect(() => {
+    // Load company location from localStorage
+    const savedSettings = localStorage.getItem('app-settings');
+    if (savedSettings) {
+      const settings = JSON.parse(savedSettings);
+      if (settings.companyLatitude && settings.companyLongitude) {
+        setCompanyLocation({
+          latitude: settings.companyLatitude,
+          longitude: settings.companyLongitude,
+        });
+      }
+    }
+  }, []);
+
   const stopCamera = () => {
     if (animationFrameId.current) {
       cancelAnimationFrame(animationFrameId.current);
@@ -52,6 +70,10 @@ export function CameraScanner() {
     stopCamera();
     setCameraStatus('loading');
     try {
+      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+         throw new Error("Camera not supported on this browser.");
+      }
+
       const stream = await navigator.mediaDevices.getUserMedia({
         video: { facingMode: 'environment' },
       });
@@ -66,10 +88,15 @@ export function CameraScanner() {
     } catch (err) {
       console.error("Error accessing camera: ", err);
       setCameraStatus('error');
+       toast({
+          variant: "destructive",
+          title: "خطأ في الكاميرا",
+          description: "فشل الوصول إلى الكاميرا. يرجى منح الإذن والمحاولة مرة أخرى.",
+      });
     }
   };
   
-  const getDistance = (coords1: GeolocationCoordinates, coords2: { latitude: number; longitude: number }) => {
+  const getDistance = (coords1: GeolocationCoordinates, coords2: GeoLocation) => {
     const toRad = (x: number) => (x * Math.PI) / 180;
     const R = 6371e3; // Earth radius in metres
     const dLat = toRad(coords2.latitude - coords1.latitude);
@@ -98,7 +125,7 @@ export function CameraScanner() {
       }
 
       // 2. Validate Geolocation
-      const distance = getDistance(userCoords, COMPANY_LOCATION);
+      const distance = getDistance(userCoords, companyLocation);
       if (distance > ALLOWED_RADIUS_METERS) {
         return { valid: false, reason: `يجب أن تكون ضمن نطاق ${ALLOWED_RADIUS_METERS} مترًا من الشركة لتسجيل الحضور. أنت على بعد ${Math.round(distance)} متر.` };
       }
@@ -109,6 +136,11 @@ export function CameraScanner() {
   const handleAction = (type: 'in' | 'out', qrCodeData: string) => {
     stopCamera();
     setCameraStatus('geolocating');
+
+    if (!navigator.geolocation) {
+         setDialog({ open: true, title: 'خطأ في تحديد الموقع', description: 'خدمة تحديد المواقع غير مدعومة في هذا المتصفح.', variant: 'error' });
+         return;
+    }
 
     navigator.geolocation.getCurrentPosition(
       (position) => {
