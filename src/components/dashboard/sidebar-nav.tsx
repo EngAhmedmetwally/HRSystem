@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, useMemo } from 'react';
+import { useEffect, useMemo } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { Camera, LogOut, Landmark } from 'lucide-react';
@@ -96,7 +96,7 @@ export function SidebarNav() {
       return allScreens.filter(s => s.id !== 'my-attendance');
     }
     // Regular employee logic
-    if (!employeeData) return []; // Return empty while loading employee data
+    if (isUserLoading || isEmployeeLoading || !employeeData) return []; // Return empty while loading employee data
     
     const allowed = employeeData.allowedScreens || [];
     // Ensure "My Attendance" is always available for logged-in employees
@@ -104,17 +104,23 @@ export function SidebarNav() {
         allowed.push('my-attendance');
     }
     
-    // The main attendance page is now handled to show only user data, so it's safe to show.
-    if (!allowed.includes('attendance')) {
-        allowed.push('attendance');
+    // The main attendance page is now handled to show only user data, so it's safe to show if allowed.
+    if (allowed.includes('attendance')) {
+       // it's already there
     }
 
     // Employees should never see the admin pages
-    const adminPages = ['employees', 'settings'];
+    const adminPages = ['employees', 'settings', 'qr-code', 'payroll', 'payroll-history'];
     const employeeVisibleScreens = allScreens.filter(screen => allowed.includes(screen.id) && !adminPages.includes(screen.id));
+    
+    // Make sure dashboard is only for admins
+    if (employeeVisibleScreens.some(s => s.id === 'dashboard')) {
+        return employeeVisibleScreens.filter(s => s.id !== 'dashboard');
+    }
 
     return employeeVisibleScreens;
-  }, [employeeData, isSuperUser]);
+  }, [employeeData, isSuperUser, isUserLoading, isEmployeeLoading]);
+
 
   const handleLogout = async () => {
     if (auth) {
@@ -136,7 +142,7 @@ export function SidebarNav() {
   }, [isSuperUser, employeeData]);
 
 
-  if (isUserLoading || (user && !isSuperUser && !employeeData && isEmployeeLoading)) {
+  if (isUserLoading || (user && !isSuperUser && isEmployeeLoading)) {
     return <SidebarSkeleton />;
   }
   
