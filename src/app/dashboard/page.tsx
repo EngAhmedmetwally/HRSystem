@@ -82,7 +82,6 @@ export default function DashboardPage() {
             const weeklyData = await Promise.all(weeklyDataPromises);
             setWeeklyAttendance(weeklyData);
         } catch (error) {
-            console.error("Failed to fetch weekly attendance due to permissions or other error.");
             // Error is already emitted, just need to handle UI state
             setWeeklyAttendance([]);
         } finally {
