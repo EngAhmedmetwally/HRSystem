@@ -31,6 +31,8 @@ const settingsSchema = z.object({
   deductionRules: z.array(deductionRuleSchema),
   companyLatitude: z.coerce.number().min(-90, 'قيمة غير صالحة').max(90, 'قيمة غير صالحة'),
   companyLongitude: z.coerce.number().min(-180, 'قيمة غير صالحة').max(180, 'قيمة غير صالحة'),
+  allowedRadiusMeters: z.coerce.number().min(5, 'يجب أن يكون النطاق 5 أمتار على الأقل'),
+  qrCodeLifespan: z.coerce.number().min(5, 'يجب أن تكون المدة 5 ثوان على الأقل'),
 });
 
 type SettingsFormValues = z.infer<typeof settingsSchema>;
@@ -52,6 +54,8 @@ export default function SettingsPage() {
     ],
     companyLatitude: 30.0444, // Default Cairo
     companyLongitude: 31.2357, // Default Cairo
+    allowedRadiusMeters: 200,
+    qrCodeLifespan: 15,
   });
 
   const {
@@ -161,11 +165,49 @@ export default function SettingsPage() {
               </div>
             </div>
 
-            <Separator />
+             <Separator />
             
-             {/* Geolocation Settings */}
+             {/* Security Settings */}
+            <div className="space-y-4">
+              <Label className="text-lg font-medium">إعدادات الأمان والتحقق</Label>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 p-4 border rounded-lg bg-secondary/30">
+                 <div>
+                    <Label htmlFor="qrCodeLifespan">مدة صلاحية رمز QR (بالثواني)</Label>
+                    <Input
+                        id="qrCodeLifespan"
+                        type="number"
+                        {...register('qrCodeLifespan')}
+                    />
+                    {errors.qrCodeLifespan && (
+                        <p className="text-sm text-destructive mt-1">
+                        {errors.qrCodeLifespan.message}
+                        </p>
+                    )}
+                </div>
+                 <div>
+                    <Label htmlFor="allowedRadiusMeters">نطاق تسجيل الحضور المسموح به (بالمتر)</Label>
+                    <Input
+                        id="allowedRadiusMeters"
+                        type="number"
+                        {...register('allowedRadiusMeters')}
+                    />
+                    {errors.allowedRadiusMeters && (
+                        <p className="text-sm text-destructive mt-1">
+                        {errors.allowedRadiusMeters.message}
+                        </p>
+                    )}
+                </div>
+              </div>
+            </div>
+
+            <Separator />
+
+            {/* Geolocation Settings */}
             <div className="space-y-4">
               <Label className="text-lg font-medium">الموقع الجغرافي للشركة</Label>
+               <p className="text-sm text-muted-foreground">
+                    يُستخدم هذا الموقع للتحقق من أن الموظف يسجل حضوره من داخل النطاق المسموح به.
+                </p>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 p-4 border rounded-lg bg-secondary/30">
                 <div>
                   <Label htmlFor="companyLatitude">خط العرض (Latitude)</Label>
@@ -200,9 +242,6 @@ export default function SettingsPage() {
                          {isLocating ? <Loader2 className="ml-2 h-4 w-4 animate-spin" /> : <LocateFixed className="ml-2 h-4 w-4" />}
                         تحديد موقعي الحالي
                     </Button>
-                    <p className="text-xs text-muted-foreground mt-2">
-                        يُستخدم هذا الموقع للتحقق من أن الموظف يسجل حضوره من داخل مقر الشركة.
-                    </p>
                 </div>
               </div>
             </div>

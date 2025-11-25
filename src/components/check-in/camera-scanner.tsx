@@ -27,8 +27,8 @@ const DEFAULT_COMPANY_LOCATION: GeoLocation = {
   latitude: 30.0444, // Cairo
   longitude: 31.2357,
 };
-const ALLOWED_RADIUS_METERS = 200; // Allow check-in within 200 meters
-const QR_LIFESPAN_MS = 15 * 1000; // 15 seconds
+const DEFAULT_ALLOWED_RADIUS_METERS = 200; // Allow check-in within 200 meters
+const DEFAULT_QR_LIFESPAN_MS = 15 * 1000; // 15 seconds
 const CHECK_IN_LOCKOUT_MS = 60 * 60 * 1000; // 1 hour
 
 export function CameraScanner() {
@@ -41,7 +41,11 @@ export function CameraScanner() {
 
   const [cameraStatus, setCameraStatus] = useState<CameraStatus>('loading');
   const [dialog, setDialog] = useState<{ open: boolean; title: string; description: string; variant: 'success' | 'error' | 'info' }>({ open: false, title: '', description: '', variant: 'success' });
+  
+  // State for settings
   const [companyLocation, setCompanyLocation] = useState<GeoLocation>(DEFAULT_COMPANY_LOCATION);
+  const [allowedRadius, setAllowedRadius] = useState(DEFAULT_ALLOWED_RADIUS_METERS);
+  const [qrLifespan, setQrLifespan] = useState(DEFAULT_QR_LIFESPAN_MS);
   
   useEffect(() => {
     // Load company location from localStorage
@@ -53,6 +57,12 @@ export function CameraScanner() {
           latitude: settings.companyLatitude,
           longitude: settings.companyLongitude,
         });
+      }
+      if (settings.allowedRadiusMeters) {
+        setAllowedRadius(settings.allowedRadiusMeters);
+      }
+      if (settings.qrCodeLifespan) {
+          setQrLifespan(settings.qrCodeLifespan * 1000);
       }
     }
   }, []);
@@ -144,7 +154,7 @@ export function CameraScanner() {
         }
         const timestamp = parseInt(decoded.split(':')[1], 10);
         const now = Date.now();
-        if (now - timestamp > QR_LIFESPAN_MS) {
+        if (now - timestamp > qrLifespan) {
             return { valid: false, reason: 'انتهت صلاحية رمز QR. حاول مرة أخرى.' };
         }
       } catch (e) {
@@ -153,8 +163,8 @@ export function CameraScanner() {
 
       // 2. Validate Geolocation
       const distance = getDistance(userCoords, companyLocation);
-      if (distance > ALLOWED_RADIUS_METERS) {
-        return { valid: false, reason: `يجب أن تكون ضمن نطاق ${ALLOWED_RADIUS_METERS} مترًا من الشركة لتسجيل الحضور. أنت على بعد ${Math.round(distance)} متر.` };
+      if (distance > allowedRadius) {
+        return { valid: false, reason: `يجب أن تكون ضمن نطاق ${allowedRadius} مترًا من الشركة لتسجيل الحضور. أنت على بعد ${Math.round(distance)} متر.` };
       }
 
       return { valid: true, reason: 'صالح' };

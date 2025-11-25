@@ -10,21 +10,24 @@ import {
 } from '@/components/ui/card';
 import QRCode from 'react-qr-code';
 
-const QR_LIFESPAN = 15; // in seconds
+const DEFAULT_QR_LIFESPAN = 15; // in seconds
 
 export default function QrCodePage() {
   const [currentDate, setCurrentDate] = useState('');
   const [qrValue, setQrValue] = useState('');
+  const [qrLifespan, setQrLifespan] = useState(DEFAULT_QR_LIFESPAN);
   const intervalRef = useRef<NodeJS.Timeout | null>(null);
 
-  const generateQRValue = () => {
-    const timestamp = Date.now();
-    // Simple encoding, in a real app, this should be a signed JWT or similar
-    const signature = btoa(`TIMESTAMP:${timestamp}`);
-    return signature;
-  };
-  
   useEffect(() => {
+    // Load custom settings from localStorage
+    const savedSettings = localStorage.getItem('app-settings');
+    if (savedSettings) {
+        const settings = JSON.parse(savedSettings);
+        if (settings.qrCodeLifespan) {
+            setQrLifespan(settings.qrCodeLifespan);
+        }
+    }
+
     const today = new Date();
     const options: Intl.DateTimeFormatOptions = {
       weekday: 'long',
@@ -33,7 +36,22 @@ export default function QrCodePage() {
       day: 'numeric',
     };
     setCurrentDate(new Intl.DateTimeFormat('ar-EG', options).format(today));
+    
+    return () => {
+      if (intervalRef.current) {
+        clearInterval(intervalRef.current);
+      }
+    };
+  }, []);
 
+  useEffect(() => {
+     const generateQRValue = () => {
+      const timestamp = Date.now();
+      // Simple encoding, in a real app, this should be a signed JWT or similar
+      const signature = btoa(`TIMESTAMP:${timestamp}`);
+      return signature;
+    };
+    
     // Function to regenerate QR
     const regenerateQrCode = () => {
       setQrValue(generateQRValue());
@@ -42,8 +60,8 @@ export default function QrCodePage() {
     // Initial generation
     regenerateQrCode();
 
-    // Set up the interval to regenerate QR code every QR_LIFESPAN seconds
-    intervalRef.current = setInterval(regenerateQrCode, QR_LIFESPAN * 1000);
+    // Set up the interval to regenerate QR code
+    intervalRef.current = setInterval(regenerateQrCode, qrLifespan * 1000);
 
     // Cleanup interval on component unmount
     return () => {
@@ -51,7 +69,7 @@ export default function QrCodePage() {
         clearInterval(intervalRef.current);
       }
     };
-  }, []);
+  }, [qrLifespan]);
 
 
   return (
@@ -84,6 +102,8 @@ export default function QrCodePage() {
             </div>
             <p className="text-muted-foreground pt-4">
               يقوم الموظفون بمسح هذا الرمز لتسجيل وقت الحضور والانصراف.
+              <br />
+              يتم تحديث هذا الرمز كل {qrLifespan} ثانية.
             </p>
           </CardContent>
         </Card>
